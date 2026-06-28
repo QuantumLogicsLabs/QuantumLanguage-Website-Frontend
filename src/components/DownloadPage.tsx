@@ -21,9 +21,9 @@ export const DownloadPage = () => (
 
       <div className="grid md:grid-cols-3 gap-8 mb-16">
         {[
-          { os: "Windows", icon: Globe, version: "v2.0.4", arch: "x64 / ARM64", link: "#", color: "from-blue-500/20" },
-          { os: "Linux", icon: Terminal, version: "v2.0.4", arch: "x64 / ARM64 / RISC-V", link: "#", color: "from-orange-500/20" },
-          { os: "macOS", icon: Cpu, version: "v2.0.4", arch: "Apple Silicon / Intel", link: "#", color: "from-purple-500/20" }
+          { os: "Windows", icon: Globe, version: "v2.0.4", arch: "x64 / ARM64", link: "/downloads/QuantumSetup-v2.0.4-x64.exe", download: "QuantumSetup-v2.0.4-x64.exe", available: true, color: "from-blue-500/20" },
+          { os: "Linux", icon: Terminal, version: "v2.0.4", arch: "x64 / ARM64 / RISC-V", link: "https://github.com/SENODROOM/Quantum-Language/releases", available: false, color: "from-orange-500/20" },
+          { os: "macOS", icon: Cpu, version: "v2.0.4", arch: "Apple Silicon / Intel", link: "https://github.com/SENODROOM/Quantum-Language/releases", available: false, color: "from-purple-500/20" }
         ].map((item, i) => (
           <motion.div 
             key={i}
@@ -46,9 +46,15 @@ export const DownloadPage = () => (
                 <span className="w-1 h-1 bg-black/20 dark:bg-white/20 rounded-full" />
                 <span>{item.arch}</span>
               </div>
-              <button className="w-full bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold hover:bg-cyan-500 dark:hover:bg-cyan-400 transition-colors flex items-center justify-center gap-2 active:scale-95 transition-transform">
-                <Download className="w-5 h-5" /> Download Installer
-              </button>
+              <a
+                href={item.link}
+                {...(item.available
+                  ? { download: item.download }
+                  : { target: "_blank", rel: "noopener noreferrer" })}
+                className="w-full bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold hover:bg-cyan-500 dark:hover:bg-cyan-400 transition-colors flex items-center justify-center gap-2 active:scale-95"
+              >
+                <Download className="w-5 h-5" /> {item.available ? "Download Installer" : "View Releases"}
+              </a>
             </div>
           </motion.div>
         ))}
