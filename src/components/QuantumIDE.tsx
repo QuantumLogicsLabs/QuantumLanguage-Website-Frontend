@@ -11,6 +11,7 @@ import { cn } from '../lib/utils';
 
 export const QuantumIDE = () => {
   const { theme } = useTheme();
+  const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
   const [files, setFiles] = React.useState<{ [key: string]: string }>(() => {
     const saved = localStorage.getItem('quantum_files');
     if (saved) {
@@ -154,48 +155,66 @@ srv.start();`
     setTimeout(() => setIsSaving(false), 1000);
   };
 
-  const runCode = () => {
+  const runCode = async () => {
     setIsExecuting(true);
-    setOutput(['Compiling...', 'Linking standard libraries...', 'Executing VM...']);
+    setOutput(['Compiling...', 'Connecting to backend...', '']);
+
     const code = files[activeFile] || '';
-    setTimeout(() => {
-      const openBraces = (code.match(/{/g) || []).length;
-      const closeBraces = (code.match(/}/g) || []).length;
-      if (openBraces !== closeBraces) {
-        setOutput(prev => [...prev, 'Error: Unmatched braces detected.', '', 'Build failed.']);
-        setIsExecuting(false);
-        return;
-      }
-      const printMatches = code.matchAll(/print\s*\((.*?)\);?/g);
-      const prints = Array.from(printMatches).map(match => {
-        let val = match[1].trim();
-        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) return val.slice(1, -1);
-        if (val.includes('checkSimilarity')) return "Similarity: 75%";
-        if (val.includes('target')) return "Initializing secure connection to: https://api.secure-node.io";
-        if (val.includes('sessionKey')) return "Session Key: 4f2a7b9c1d8e3f5a6b0c9d8e7f6a5b4c";
-        if (val.includes('port')) return "Quantum Server listening on port 8080";
-        if (/^[\d\s\+\-\*\/\(\)]+$/.test(val)) {
-          try { return eval(val).toString(); } catch (e) {}
-        }
-        return val;
+    const extension = activeFile.endsWith('.c') ? '.c' : activeFile.endsWith('.cpp') ? '.cpp' : activeFile.endsWith('.js') ? '.js' : '.sa';
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extension, code })
       });
-      if (prints.length > 0) {
-        setOutput(prev => [...prev, ...prints, '', 'Program exited with code 0']);
-      } else {
-        if (activeFile === 'main.sa') setOutput(prev => [...prev, 'Initializing secure connection to: https://api.secure-node.io', 'Payload encrypted with AES-256', 'Session Key: 4f2a7b9c1d8e3f5a6b0c9d8e7f6a5b4c', 'Server Response: 200 OK', '', 'Program exited with code 0']);
-        else if (activeFile === 'utils.sa') setOutput(prev => [...prev, 'Similarity: 75%', '', 'Program exited with code 0']);
-        else if (activeFile === 'server.sa') setOutput(prev => [...prev, 'Quantum Server listening on port 8080', '', 'Program exited with code 0']);
-        else setOutput(prev => [...prev, 'Execution successful.', '', 'Program exited with code 0']);
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Execution failed');
       }
+
+      const outputLines = [] as string[];
+      if (data.compiledOutput) {
+        outputLines.push(...data.compiledOutput.split(/\r?\n/).filter(Boolean));
+      }
+      if (data.compilerError) {
+        outputLines.push(data.compilerError);
+      }
+      if (data.hasWarnings) {
+        outputLines.push('[Warning] Static analysis emitted warnings.');
+      }
+
+      setOutput(outputLines.length > 0 ? outputLines : ['Execution completed successfully.']);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      setOutput([`Error: ${message}`]);
+    } finally {
       setIsExecuting(false);
-    }, 1500);
+    }
   };
 
   const createFile = () => {
     if (!newFileName) return;
-    const name = newFileName.endsWith('.sa') ? newFileName : `${newFileName}.sa`;
-    if (files[name]) { alert('File already exists'); return; }
-    setFiles(prev => ({ ...prev, [name]: '// New Quantum Script\n' }));
+
+    const trimmedName = newFileName.trim();
+    const normalizedName = trimmedName.includes('.') ? trimmedName : `${trimmedName}.sa`;
+    const supportedNames = ['.sa', '.js', '.cpp', '.c'];
+    const hasSupportedExtension = supportedNames.some(ext => normalizedName.endsWith(ext));
+    const name = hasSupportedExtension ? normalizedName : `${normalizedName}.sa`;
+
+    if (files[name]) {
+      alert('File already exists');
+      return;
+    }
+
+    const starterCode = name.endsWith('.c') || name.endsWith('.cpp')
+      ? '// Write your code here\n'
+      : name.endsWith('.js')
+        ? '// Write your JavaScript here\n'
+        : '// New Quantum Script\n';
+
+    setFiles(prev => ({ ...prev, [name]: starterCode }));
     setActiveFile(name);
     setNewFileName('');
     setIsCreateModalOpen(false);
@@ -512,7 +531,7 @@ srv.start();`
             <h3 className="text-xl font-bold text-black dark:text-white mb-4">Create New File</h3>
             <input 
               type="text"
-              placeholder="filename.sa"
+              placeholder="filename.sa, filename.js, filename.cpp, or filename.c"
               value={newFileName}
               onChange={(e) => setNewFileName(e.target.value)}
               className="w-full bg-black/5 dark:bg-black border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white mb-6 outline-none focus:border-cyan-500 transition-colors"
