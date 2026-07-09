@@ -34,7 +34,7 @@ export const ScrollToTop = () => {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.8, y: 20 }}
           onClick={scrollToTop}
-          className="fixed bottom-8 right-8 z-[60] p-4 bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-full shadow-2xl group hover:scale-110 transition-transform"
+          className="fixed bottom-24 right-8 z-[60] p-4 bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-full shadow-2xl group hover:scale-110 transition-transform"
         >
           <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none">
             <circle

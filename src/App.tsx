@@ -25,6 +25,7 @@ import { Vision } from './components/Vision';
 import { Ecosystem } from './components/Ecosystem';
 import { Installation } from './components/Installation';
 import { Newsletter } from './components/Newsletter';
+import { ChatAssistant } from './components/ChatAssistant';
 
 export default function App() {
   const { pathname } = useLocation();
@@ -86,6 +87,7 @@ export default function App() {
         <Footer />
         <ScrollProgress />
         <ScrollToTop />
+        <ChatAssistant />
         <CustomCursor />
       </div>
     </ErrorBoundary>
