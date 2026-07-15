@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
-
+import QuantumTerminal from './terminal/QuantumTerminal';
+import { socketManager } from '../socket/socketManager'; // Added Socket Manager Import
 import React from 'react';
 import { motion } from 'motion/react';
 import { 
@@ -193,10 +194,19 @@ srv.start();`
 
   const runCode = async () => {
     setIsExecuting(true);
-    setOutput(['Connecting to remote engine...', 'Executing code...']);
-    
     const codeContent = files[activeFile] || '';
 
+    // --- NEW WEBSOCKET INTEGRATION ---
+    // Triggers the WebSocket connection instead of the HTTP fetch
+    socketManager.runScript(codeContent);
+    setTimeout(() => setIsExecuting(false), 500); // Visual reset for the button
+    return; // Bypass the old HTTP logic below without removing it
+    // ---------------------------------
+
+    // --- OLD LOGIC PRESERVED BELOW ---
+    /*
+    setOutput(['Connecting to remote engine...', 'Executing code...']);
+    
     const localResult = runKnownSample(codeContent);
     if (localResult) {
       setOutput(localResult);
@@ -245,6 +255,7 @@ srv.start();`
     } finally {
       setIsExecuting(false);
     }
+    */
   };
 
   const createFile = () => {
@@ -520,7 +531,7 @@ srv.start();`
                   </div>
               </div>
               
-              {/* Terminal */}
+              {/* Terminal Section (Replaced inner mapped output with QuantumTerminal) */}
               <div className="h-40 md:h-56 bg-[#f8fafc] dark:bg-black border-t border-black/10 dark:border-white/10 flex flex-col transition-colors duration-300">
                 <div className="px-4 md:px-6 py-2 bg-black/5 dark:bg-white/5 border-b border-black/5 dark:border-white/5 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -535,6 +546,13 @@ srv.start();`
                     Clear
                   </button>
                 </div>
+
+                {/* NEW XTERM WEBSOCKET TERMINAL */}
+                <div className="flex-1 w-full h-full overflow-hidden bg-transparent">
+                  <QuantumTerminal />
+                </div>
+
+                {/* ORIGINAL FALLBACK OUTPUT (Commented out to preserve official code)
                 <div className="flex-1 p-4 md:p-5 font-mono text-[10px] md:text-xs text-green-600 dark:text-green-400 overflow-auto custom-scrollbar">
                   {output.length === 0 ? (
                     <div className="space-y-2">
@@ -573,6 +591,7 @@ srv.start();`
                     </div>
                   )}
                 </div>
+                */}
               </div>
             </div>
           </div>

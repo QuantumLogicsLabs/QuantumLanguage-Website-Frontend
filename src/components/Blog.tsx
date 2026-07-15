@@ -5,8 +5,8 @@ import { Link } from 'react-router-dom';
 import { blogs } from '../data/blogs';
 
 export const Blog = () => {
-  // We only display the latest 3 posts on the homepage Blog section
-  const latestPosts = blogs.slice(0, 3);
+ // Reverses the array to pick the 3 newest additions first!
+const latestPosts = [...blogs].reverse().slice(0, 3);
 
   return (
     <section id="blog" className="py-32 bg-white dark:bg-black transition-colors duration-300 border-t border-black/5 dark:border-white/5 relative overflow-hidden">

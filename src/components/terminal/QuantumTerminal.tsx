@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { cn } from '../../lib/utils';
+import { socketManager } from '../../socket/socketManager';
 
 interface QuantumTerminalProps {
   files: Record<string, string>;
@@ -53,7 +54,7 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
   const fitAddonRef = useRef<FitAddon | null>(null);
   const lineBufferRef = useRef<string>('');
   const cursorPosRef = useRef<number>(0);
-  const lastCursorRowRef = useRef<number>(0); // which wrapped visual row the terminal's real cursor is on, within the current input block
+  const lastCursorRowRef = useRef<number>(0);
   const undoStackRef = useRef<{ text: string; cursor: number }[]>([]);
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef<number>(0);
@@ -62,10 +63,13 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
   const filesRef = useRef(files);
   const [isLoading, setIsLoading] = useState(true);
   const [isFocused, setIsFocused] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
 
-  // keep these refs current without remounting the terminal (the mount
-  // effect below only depends on [theme], so a plain closure over the
-  // props would go stale the moment a parent re-render passes a new value)
+  // Store refs to terminal functions for output streaming
+  const termWriteRef = useRef<(text: string) => void>(() => {});
+  const termClearRef = useRef<() => void>(() => {});
+
+  // keep these refs current without remounting the terminal
   useEffect(() => {
     activeFileRef.current = activeFile;
   }, [activeFile]);
@@ -127,17 +131,10 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
     term.writeln('');
     term.write(getPrompt());
 
-    // brief minimum loading state so the init animation is perceivable
     const loadingTimer = setTimeout(() => setIsLoading(false), 300);
 
-    // Cursor moves (CUU/CUD/CUB/CUF) clamp at the edge of the current visual
-    // row and never cross into a wrapped row above/below, so once a command
-    // wraps to multiple rows we have to do the row/column math ourselves
-    // instead of relying on relative "move left/right" escapes.
     const getCols = () => term.cols || 80;
 
-    // move the terminal's real cursor to match cursorPosRef, from wherever
-    // it currently sits (lastCursorRowRef) — text on screen is unchanged
     const repositionCursor = () => {
       const cols = getCols();
       const targetAbsCol = getPrompt().length + cursorPosRef.current;
@@ -146,12 +143,10 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
       const rowDelta = targetRow - lastCursorRowRef.current;
       if (rowDelta > 0) term.write(`\x1b[${rowDelta}B`);
       else if (rowDelta < 0) term.write(`\x1b[${-rowDelta}A`);
-      term.write(`\x1b[${targetCol + 1}G`); // CHA — absolute column, 1-indexed
+      term.write(`\x1b[${targetCol + 1}G`);
       lastCursorRowRef.current = targetRow;
     };
 
-    // move the cursor to just past the last character of the input block —
-    // used before printing anything new below the current command
     const moveToBlockEnd = () => {
       const cols = getCols();
       const fullLen = getPrompt().length + lineBufferRef.current.length;
@@ -161,15 +156,13 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
       lastCursorRowRef.current = lastRow;
     };
 
-    // redraw the whole input line from scratch and reposition the cursor —
-    // simplest way to keep the display correct across wrapped rows
     const redrawLine = () => {
       const cols = getCols();
       const prompt = getPrompt();
       const fullText = prompt + lineBufferRef.current;
 
       if (lastCursorRowRef.current > 0) term.write(`\x1b[${lastCursorRowRef.current}A`);
-      term.write('\r\x1b[0J'); // back to the block's first row, then clear to end of screen
+      term.write('\r\x1b[0J');
       term.write(fullText);
 
       lastCursorRowRef.current = Math.max(1, Math.ceil(fullText.length / cols)) - 1;
@@ -195,8 +188,6 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
       const after = lineBufferRef.current.slice(cursorPosRef.current);
       lineBufferRef.current = before + text + after;
       cursorPosRef.current += text.length;
-      // fast path: appending within a single row is just a plain write,
-      // no need to clear+repaint the whole line (avoids visible flicker)
       const fitsOneRow = wasAtEnd && (getPrompt().length + lineBufferRef.current.length) < getCols();
       if (fitsOneRow) {
         term.write(text);
@@ -206,11 +197,59 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
       }
     };
 
+    // Execute code directly in the terminal (not via prompt)
+    const executeCode = (command: string, codeContent?: string) => {
+      const parts = command.trim().split(/\s+/);
+      const action = parts[0].toLowerCase();
+      const fileName = parts[1];
+
+      // Validate command
+      if (action !== 'quantum' && action !== 'qrun') {
+        term.writeln(`Unknown command: ${action}`);
+        term.write(getPrompt());
+        return;
+      }
+
+      if (!fileName) {
+        term.writeln(`Usage: ${action} <filename>.sa`);
+        term.write(getPrompt());
+        return;
+      }
+
+      if (!filesRef.current[fileName]) {
+        term.writeln(`File not found: ${fileName}`);
+        term.write(getPrompt());
+        return;
+      }
+
+      // Show execution status
+      term.writeln(``);
+      term.writeln(`\x1b[33m[Status]\x1b[0m Running ${action} ${fileName}...`);
+      term.writeln(`\x1b[33m[Status]\x1b[0m Connecting to backend...`);
+
+      setIsExecuting(true);
+
+      // Get the code from the files ref
+      const code = codeContent || filesRef.current[fileName] || '';
+
+      // Connect and execute via socket
+      socketManager.connect();
+      socketManager.runScript(code);
+    };
+
+    // Setup output streaming from socket manager
+    socketManager.onOutputReceived = (text: string) => {
+      if (termWriteRef.current) {
+        termWriteRef.current(text);
+      }
+    };
+
     const submitCommand = () => {
       const command = lineBufferRef.current.trim();
       moveToBlockEnd();
       term.write('\r\n');
       lastCursorRowRef.current = 0;
+
       if (command === 'clear') {
         term.clear();
       } else if (command === 'help') {
@@ -222,12 +261,15 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
           historyRef.current.forEach((cmd, i) => term.writeln(`  ${i + 1}  ${cmd}`));
         }
       } else if (command.length > 0) {
-        term.writeln(`(no backend wired yet) → ${command}`);
         const parts = command.split(/\s+/);
         if ((parts[0] === 'quantum' || parts[0] === 'qrun') && parts[1]) {
-          onRunRef.current?.(parts[1]);
+          // Execute code directly without going through placeholder
+          executeCode(command);
+        } else {
+          term.writeln(`Type \`quantum <file>.sa\` or \`qrun <file>.sa\` to run.`);
         }
       }
+
       if (command.length > 0) {
         const last = historyRef.current[historyRef.current.length - 1];
         if (command !== last) {
@@ -238,7 +280,7 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
           try {
             localStorage.setItem(HISTORY_KEY, JSON.stringify(historyRef.current));
           } catch {
-            // localStorage unavailable — history just won't persist
+            // localStorage unavailable
           }
         }
       }
@@ -249,8 +291,6 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
       term.write(getPrompt());
     };
 
-    // let the browser handle native copy when the user has text selected,
-    // instead of treating Ctrl+C as "interrupt"
     term.attachCustomKeyEventHandler((event) => {
       if (event.type !== 'keydown') return true;
       const isCopyShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c';
@@ -260,15 +300,9 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
         return false;
       }
       if (isPasteShortcut) {
-        // xterm otherwise treats Ctrl+V as a control character and blocks
-        // the browser's native paste — bail out so the browser handles it.
         return false;
       }
       if (isWordDeleteShortcut) {
-        // Ctrl+Backspace isn't distinguishable from plain Backspace once it
-        // reaches onData, so handle it here where the raw event is available.
-        // (Ctrl+W would be the usual terminal binding for this, but browsers
-        // reserve Ctrl+W to close the tab and never deliver it to the page.)
         pushUndo();
         const newPos = findPrevWordBoundary(lineBufferRef.current, cursorPosRef.current);
         lineBufferRef.current = lineBufferRef.current.slice(0, newPos) + lineBufferRef.current.slice(cursorPosRef.current);
@@ -285,13 +319,11 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
       if (data === '\r') {
         submitCommand();
       } else if (data === '\x1b[A') {
-        // Arrow Up — older command
         if (historyIndexRef.current > 0) {
           historyIndexRef.current -= 1;
           setLine(historyRef.current[historyIndexRef.current]);
         }
       } else if (data === '\x1b[B') {
-        // Arrow Down — newer command
         if (historyIndexRef.current < historyRef.current.length) {
           historyIndexRef.current += 1;
           const text = historyIndexRef.current === historyRef.current.length
@@ -300,43 +332,34 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
           setLine(text);
         }
       } else if (data === '\x1b[1;5D') {
-        // Ctrl+Left — jump back one word
         cursorPosRef.current = findPrevWordBoundary(lineBufferRef.current, cursorPosRef.current);
         repositionCursor();
       } else if (data === '\x1b[1;5C') {
-        // Ctrl+Right — jump forward one word
         cursorPosRef.current = findNextWordBoundary(lineBufferRef.current, cursorPosRef.current);
         repositionCursor();
       } else if (data === '\x1b[D') {
-        // Arrow Left — move cursor back one character
         if (cursorPosRef.current > 0) {
           cursorPosRef.current -= 1;
           repositionCursor();
         }
       } else if (data === '\x1b[C') {
-        // Arrow Right — move cursor forward one character
         if (cursorPosRef.current < lineBufferRef.current.length) {
           cursorPosRef.current += 1;
           repositionCursor();
         }
       } else if (data === '\x1b[H' || data === '\x1b[1~') {
-        // Home — jump to start of line
         cursorPosRef.current = 0;
         repositionCursor();
       } else if (data === '\x1b[F' || data === '\x1b[4~') {
-        // End — jump to end of line
         cursorPosRef.current = lineBufferRef.current.length;
         repositionCursor();
       } else if (code === 1) {
-        // Ctrl+A — jump to start of line (Unix-style alias for Home)
         cursorPosRef.current = 0;
         repositionCursor();
       } else if (code === 5) {
-        // Ctrl+E — jump to end of line (Unix-style alias for End)
         cursorPosRef.current = lineBufferRef.current.length;
         repositionCursor();
       } else if (code === 26) {
-        // Ctrl+Z — undo the last edit to the current line
         const prev = undoStackRef.current.pop();
         if (prev) {
           lineBufferRef.current = prev.text;
@@ -344,7 +367,6 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
           redrawLine();
         }
       } else if (data === '\x1b[3~') {
-        // Delete — remove the character after the cursor
         if (cursorPosRef.current < lineBufferRef.current.length) {
           pushUndo();
           const before = lineBufferRef.current.slice(0, cursorPosRef.current);
@@ -353,7 +375,6 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
           redrawLine();
         }
       } else if (code === 127) {
-        // Backspace — remove the character before the cursor
         if (cursorPosRef.current > 0) {
           pushUndo();
           const wasAtEnd = cursorPosRef.current === lineBufferRef.current.length;
@@ -361,8 +382,6 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
           const after = lineBufferRef.current.slice(cursorPosRef.current);
           lineBufferRef.current = before + after;
           cursorPosRef.current -= 1;
-          // fast path: deleting the last character on a single row is just
-          // a plain erase, no need to clear+repaint the whole line
           const fitsOneRow = wasAtEnd && (getPrompt().length + lineBufferRef.current.length + 1) < getCols();
           if (fitsOneRow) {
             term.write('\b \b');
@@ -372,12 +391,10 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
           }
         }
       } else if (code === 12) {
-        // Ctrl+L
         term.clear();
         lastCursorRowRef.current = 0;
         redrawLine();
       } else if (code === 3) {
-        // Ctrl+C
         moveToBlockEnd();
         term.write('^C\r\n');
         lastCursorRowRef.current = 0;
@@ -386,7 +403,6 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
         historyIndexRef.current = historyRef.current.length;
         term.write(getPrompt());
       } else if (data === '\t') {
-        // Tab completion — complete the word before the cursor against open filenames
         const uptoCursor = lineBufferRef.current.slice(0, cursorPosRef.current);
         const parts = uptoCursor.split(' ');
         const partial = parts[parts.length - 1];
@@ -401,8 +417,6 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
           redrawLine();
         }
       } else if (data.length > 1 && !data.startsWith('\x1b')) {
-        // Multi-character chunk with no escape prefix — this is a paste.
-        // Split on line breaks and submit each completed line as its own command.
         const lines = data.split(/\r\n|\r|\n/);
         lines.forEach((lineText, idx) => {
           insertAtCursor(lineText);
@@ -411,7 +425,6 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
           }
         });
       } else if (code >= 32) {
-        // Printable character
         insertAtCursor(data);
       }
     });
@@ -419,15 +432,16 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
     termRef.current = term;
     fitAddonRef.current = fitAddon;
 
+    // Update refs for output streaming
+    termWriteRef.current = (text: string) => term.write(text);
+    termClearRef.current = () => term.clear();
+
     const handleResize = () => fitAddon.fit();
     window.addEventListener('resize', handleResize);
 
-    // catches panel resizes that don't fire a window resize event
-    // (e.g. a draggable split-pane divider between editor and terminal)
     const resizeObserver = new ResizeObserver(() => fitAddon.fit());
     resizeObserver.observe(containerRef.current);
 
-    // visual cue for whether the terminal currently has keyboard focus
     const textareaEl = containerRef.current.querySelector('.xterm-helper-textarea');
     const handleFocus = () => setIsFocused(true);
     const handleBlur = () => setIsFocused(false);
@@ -447,7 +461,6 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
 
   return (
     <div className="relative h-full w-full p-[2px] overflow-hidden rounded-md">
-      {/* continuously rotating glow, only visible while the terminal has focus */}
       <div
         className={cn(
           "pointer-events-none absolute -inset-[40%] transition-opacity duration-300",

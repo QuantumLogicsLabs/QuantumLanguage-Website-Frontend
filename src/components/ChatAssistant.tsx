@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MessageSquare, Send, X, Bot, Sparkles, AlertCircle, Copy, Check } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Sparkles, AlertCircle, Copy, Check, Trash2, Square } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTheme } from '../contexts/ThemeContext';
@@ -128,8 +128,52 @@ Select a quick prompt below or type your questions directly!`
 
   const [input, setInput] = React.useState('');
   const [isTyping, setIsTyping] = React.useState(false);
+  const [isStreaming, setIsStreaming] = React.useState(false);
   const [isFallbackMode, setIsFallbackMode] = React.useState(false);
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
+
+  const streamingIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = React.useRef<AbortController | null>(null);
+
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (streamingIntervalRef.current) {
+      clearInterval(streamingIntervalRef.current);
+      streamingIntervalRef.current = null;
+    }
+    setIsTyping(false);
+    setIsStreaming(false);
+  };
+
+  React.useEffect(() => {
+    return () => {
+      handleStop();
+    };
+  }, []);
+
+  const handleClearChat = () => {
+    handleStop();
+    const initialMsg: Message[] = [
+      {
+        role: 'assistant',
+        content: `### Welcome to Quantum AI Assistant!
+I'm here to help you learn and build applications using the **Quantum Language**.
+
+Here is what you can ask me about:
+* **Architecture & Internals**: Two execution paths (compile + bundle vs direct interpretation), compiler stack, and stack-based VM call frames.
+* **Multi-Syntax & Language Features**: Combining Python, JS, and C/C++ syntax in a single file, closures, OOP with inheritance, exception handling, and pointers.
+* **Standard Library & Crypto**: Over 200 native functions, including hashing (SHA-256/1, MD5), encryption (AES-128 ECB), rot13, base64, Shannon entropy, and file I/O.
+* **Build & CLI Tools**: Running the REPL, running tests, compiling with \`quantum.exe\`, and using the \`qrun.exe\` interpreter.
+
+Select a quick prompt below or type your questions directly!`
+      }
+    ];
+    setMessages(initialMsg);
+    sessionStorage.removeItem('quantum_chat_history');
+  };
 
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
@@ -148,12 +192,15 @@ Select a quick prompt below or type your questions directly!`
   }, [isTyping]);
 
   const handleSend = async (textToSend: string) => {
-    if (!textToSend.trim() || isTyping) return;
+    if (!textToSend.trim() || isTyping || isStreaming) return;
 
     const userMessage: Message = { role: 'user', content: textToSend };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const response = await fetch(`${API_BASE}/api/chat`, {
@@ -161,6 +208,7 @@ Select a quick prompt below or type your questions directly!`
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: [...messages, userMessage]
         })
@@ -169,22 +217,56 @@ Select a quick prompt below or type your questions directly!`
       const data = await response.json();
 
       if (data.success) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+        setIsTyping(false);
+        setIsStreaming(true);
+
+        const fullMessage = data.message;
+        const words = fullMessage.split(/(\s+)/);
+        let currentWordIndex = 0;
+        let currentText = '';
+
+        setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+
+        const interval = setInterval(() => {
+          if (currentWordIndex < words.length) {
+            currentText += words[currentWordIndex];
+            currentWordIndex++;
+            setMessages(prev => {
+              const copy = [...prev];
+              copy[copy.length - 1] = { role: 'assistant', content: currentText };
+              return copy;
+            });
+          } else {
+            if (streamingIntervalRef.current) {
+              clearInterval(streamingIntervalRef.current);
+              streamingIntervalRef.current = null;
+            }
+            setIsStreaming(false);
+          }
+        }, 12);
+        streamingIntervalRef.current = interval;
+
         setIsFallbackMode(Boolean(data.isFallback));
       } else {
         setMessages(prev => [...prev, { 
           role: 'assistant', 
           content: `❌ Error: ${data.error || 'Failed to fetch response from backend.'}` 
         }]);
+        setIsTyping(false);
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('Fetch request aborted');
+        return;
+      }
       console.error('Chat API request failed:', error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
         content: `❌ Connection Error: Make sure the Quantum backend server is running at ${API_BASE}.` 
       }]);
-    } finally {
       setIsTyping(false);
+    } finally {
+      abortControllerRef.current = null;
     }
   };
 
@@ -426,10 +508,10 @@ Select a quick prompt below or type your questions directly!`
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.2 }}
             className={cn(
-              "w-[calc(100vw-2rem)] sm:w-96 h-[520px] rounded-2xl flex flex-col shadow-2xl overflow-hidden border border-black/10 dark:border-white/10 mb-4",
+              "w-[calc(100vw-2rem)] sm:w-96 h-[520px] rounded-2xl flex flex-col shadow-2xl overflow-hidden border border-black/10 dark:border-white/10 mb-4 transition-all duration-300",
               theme === 'dark' 
-                ? "bg-black/90 backdrop-blur-xl text-white" 
-                : "bg-white/95 backdrop-blur-xl text-black"
+                ? "glass-dark text-white shadow-cyan-500/5" 
+                : "glass text-black shadow-black/5"
             )}
           >
             {/* Header */}
@@ -444,12 +526,23 @@ Select a quick prompt below or type your questions directly!`
                   <span className="text-[9px] text-black/40 dark:text-white/40 font-mono">Bytecode VM v2.0.0</span>
                 </div>
               </div>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors text-black/50 dark:text-white/50 hover:text-red-500 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleClearChat}
+                  title="Clear chat history"
+                  className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors text-black/50 dark:text-white/50 hover:text-cyan-500 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors text-black/50 dark:text-white/50 hover:text-red-500 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Dev Mode Fallback Banner */}
@@ -462,75 +555,117 @@ Select a quick prompt below or type your questions directly!`
               </div>
             )}
 
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-              {messages.map((msg, index) => (
-                <div 
-                  key={index}
-                  className={cn(
-                    "flex flex-col max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs shadow-sm",
-                    msg.role === 'user'
-                      ? "ml-auto bg-cyan-500/10 border border-cyan-500/20 text-cyan-900 dark:text-cyan-100 rounded-br-none"
-                      : "mr-auto bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-bl-none"
-                  )}
-                >
-                  {parseMessageContent(msg.content, index)}
-                </div>
-              ))}
-
-              {isTyping && (
-                <div className="flex items-center gap-1.5 p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 mr-auto rounded-bl-none max-w-[50%]">
-                  <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-              )}
-              {/* Starter Chips */}
-              {!isTyping && (
-                <div className="pt-2 flex flex-wrap gap-1.5 justify-start">
-                  {STARTER_PROMPTS.map((prompt, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleSend(prompt.text)}
-                      className="text-[9px] font-medium px-2 py-1.5 rounded-lg border border-black/10 dark:border-white/10 hover:border-cyan-500 dark:hover:border-cyan-400 bg-white dark:bg-zinc-900 text-black/60 dark:text-white/60 hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors shadow-sm cursor-pointer"
+            {/* Chat Messages relative wrapper */}
+            <div className="flex-1 relative overflow-hidden flex flex-col">
+              {/* Fade Overlays */}
+              <div className="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-white dark:from-zinc-950 to-transparent pointer-events-none z-10 opacity-70" />
+              
+              <div className={cn(
+                "flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar pb-6",
+                theme === 'dark' ? "cyber-grid bg-zinc-950/30" : "cyber-grid-light bg-slate-50/30"
+              )}>
+                <AnimatePresence initial={false}>
+                  {messages.map((msg, index) => (
+                    <motion.div 
+                      key={index}
+                      initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className={cn(
+                        "flex flex-col max-w-[85%] rounded-3xl px-4 py-3 text-xs shadow-sm transition-all duration-200",
+                        msg.role === 'user'
+                          ? "ml-auto bg-cyan-500/10 border border-cyan-500/20 text-cyan-900 dark:text-cyan-100 rounded-br-none shadow-cyan-500/5 hover:border-cyan-500/40"
+                          : "mr-auto bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/5 rounded-bl-none"
+                      )}
                     >
-                      {prompt.label}
-                    </button>
+                      {parseMessageContent(msg.content, index)}
+                    </motion.div>
                   ))}
-                </div>
-              )}
-              <div ref={messagesEndRef} />
+                </AnimatePresence>
+
+                {isTyping && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex items-center gap-1.5 p-3 rounded-3xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/5 mr-auto rounded-bl-none max-w-[50%]"
+                  >
+                    <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </motion.div>
+                )}
+                {/* Starter Chips */}
+                {!isTyping && !isStreaming && (
+                  <div className="pt-2 flex flex-wrap gap-1.5 justify-start">
+                    {STARTER_PROMPTS.map((prompt, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handleSend(prompt.text)}
+                        className="text-[10px] sm:text-xs font-medium px-3 py-1.5 rounded-xl border border-black/10 dark:border-white/10 hover:border-cyan-500/50 dark:hover:border-cyan-400/50 bg-white dark:bg-zinc-900 text-black/60 dark:text-white/60 hover:text-cyan-500 dark:hover:text-cyan-400 transition-all duration-200 hover:-translate-y-0.5 shadow-sm hover:shadow-cyan-500/5 cursor-pointer"
+                      >
+                        {prompt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-zinc-950 to-transparent pointer-events-none z-10 opacity-70" />
             </div>
 
             {/* Input Bar */}
-            <form 
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSend(input);
-              }}
-              className="p-3 bg-black/5 dark:bg-white/5 border-t border-black/10 dark:border-white/10 flex gap-2"
-            >
-              <input
-                type="text"
-                placeholder="Ask about Quantum Language..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                className="flex-1 bg-white dark:bg-zinc-950 border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-xs outline-none focus:border-cyan-500 transition-colors text-black dark:text-white"
-                disabled={isTyping}
-              />
-              <button 
-                type="submit"
-                disabled={!input.trim() || isTyping}
-                className={cn(
-                  "p-2 rounded-xl transition-all cursor-pointer",
-                  input.trim() && !isTyping
-                    ? "bg-cyan-500 text-black hover:bg-cyan-400 hover:scale-105"
-                    : "bg-black/10 dark:bg-white/5 text-black/35 dark:text-white/30 cursor-not-allowed"
-                )}
+            <div className="p-3 border-t border-black/10 dark:border-white/10 bg-transparent">
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (isTyping || isStreaming) {
+                    handleStop();
+                  } else {
+                    handleSend(input);
+                  }
+                }}
+                className="relative flex items-center bg-white dark:bg-zinc-950 border border-black/10 dark:border-white/10 rounded-2xl shadow-inner focus-within:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-500/30 transition-all duration-200 pl-3 pr-1.5 py-1.5"
               >
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            </form>
+                <input
+                  type="text"
+                  placeholder={
+                    isTyping 
+                      ? "AI is thinking... click stop to cancel" 
+                      : isStreaming 
+                        ? "AI is writing... click stop to cancel" 
+                        : "Ask about Quantum Language..."
+                  }
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  className="flex-1 bg-transparent border-0 outline-none text-xs text-black dark:text-white pr-2 py-1 placeholder:text-black/40 dark:placeholder:text-white/30"
+                />
+                {isTyping || isStreaming ? (
+                  <button 
+                    type="button"
+                    onClick={handleStop}
+                    className="p-2 rounded-xl transition-all cursor-pointer bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white hover:scale-105 shadow-md shadow-red-500/10"
+                    title="Stop generating"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                  </button>
+                ) : (
+                  <button 
+                    type="submit"
+                    disabled={!input.trim()}
+                    className={cn(
+                      "p-2 rounded-xl transition-all cursor-pointer",
+                      input.trim()
+                        ? "bg-cyan-500 text-black hover:bg-cyan-400 hover:scale-105 shadow-md shadow-cyan-500/20"
+                        : "bg-black/10 dark:bg-white/5 text-black/35 dark:text-white/30 cursor-not-allowed"
+                    )}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </form>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
