@@ -549,7 +549,7 @@ srv.start();`
 
                 {/* NEW XTERM WEBSOCKET TERMINAL */}
                 <div className="flex-1 w-full h-full overflow-hidden bg-transparent">
-                  <QuantumTerminal />
+                  <QuantumTerminal files={files} activeFile={activeFile} />
                 </div>
 
                 {/* ORIGINAL FALLBACK OUTPUT (Commented out to preserve official code)

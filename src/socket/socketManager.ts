@@ -1,10 +1,21 @@
+interface ExecutionRequest {
+  code: string;
+}
+
+const isDebugMode = process.env.NODE_ENV === 'development' || process.env.VITE_DEBUG === 'true';
+
 export class QuantumSocketManager {
   private socket: WebSocket | null = null;
   public onOutputReceived: ((text: string) => void) | null = null;
   public onStatusChange: ((status: string) => void) | null = null;
   private isConnected: boolean = false;
+  private pendingExecution: ExecutionRequest | null = null;
 
   connect() {
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
     if (this.socket) {
       this.disconnect();
     }
@@ -13,20 +24,33 @@ export class QuantumSocketManager {
 
     this.socket.onopen = () => {
       this.isConnected = true;
+
       if (this.onStatusChange) this.onStatusChange("connected");
-      if (this.onOutputReceived) this.onOutputReceived("\x1b[32m🟢 Connected to Quantum Server\x1b[0m\r\n");
+      if (isDebugMode && this.onOutputReceived) {
+        this.onOutputReceived("\x1b[32m🟢 Connected to Quantum Server\x1b[0m\r\n");
+      }
+
+      // Process any pending execution request
+      if (this.pendingExecution) {
+        this.socket?.send(JSON.stringify({ type: "run", payload: this.pendingExecution.code }));
+        this.pendingExecution = null;
+      }
     };
 
     this.socket.onclose = () => {
       this.isConnected = false;
       if (this.onStatusChange) this.onStatusChange("disconnected");
-      if (this.onOutputReceived) this.onOutputReceived("\x1b[31m🔴 Connection closed by server\x1b[0m\r\n");
+      if (isDebugMode && this.onOutputReceived) {
+        this.onOutputReceived("\x1b[31m🔴 Connection closed by server\x1b[0m\r\n");
+      }
     };
 
     this.socket.onerror = (error) => {
       this.isConnected = false;
       if (this.onStatusChange) this.onStatusChange("error");
-      if (this.onOutputReceived) this.onOutputReceived(`\x1b[31m🔴 Connection error: ${error}\x1b[0m\r\n`);
+      if (isDebugMode && this.onOutputReceived) {
+        this.onOutputReceived(`\x1b[31m🔴 Connection error: ${error}\x1b[0m\r\n`);
+      }
     };
 
     this.socket.onmessage = (event) => {
@@ -40,10 +64,16 @@ export class QuantumSocketManager {
           if (this.onOutputReceived) this.onOutputReceived(`\x1b[31m${data.payload}\x1b[0m`);
           break;
         case "status":
-          if (this.onOutputReceived) this.onOutputReceived(`\x1b[33m[Status]: ${data.payload}\x1b[0m\r\n`);
+          // Only show status messages in debug mode
+          if (isDebugMode && this.onOutputReceived) {
+            this.onOutputReceived(`\x1b[33m[Status]: ${data.payload}\x1b[0m\r\n`);
+          }
           break;
         case "process_completion":
-          if (this.onOutputReceived) this.onOutputReceived("\x1b[32m[Process Completed]\x1b[0m\r\n");
+          // Only show process completion in debug mode
+          if (isDebugMode && this.onOutputReceived) {
+            this.onOutputReceived("\x1b[32m[Process Completed]\x1b[0m\r\n");
+          }
           break;
       }
     };
@@ -58,12 +88,19 @@ export class QuantumSocketManager {
   }
 
   runScript(code: string) {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      if (this.onOutputReceived) this.onOutputReceived("\x1b[33m⚠️  No backend connection. Start the backend server on port 5000.\x1b[0m\r\n");
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify({ type: "run", payload: code }));
       return;
     }
 
-    this.socket.send(JSON.stringify({ type: "run", payload: code }));
+    if (this.socket?.readyState === WebSocket.CONNECTING) {
+      this.pendingExecution = { code };
+      return;
+    }
+
+    // No valid connection - store pending and trigger connect
+    this.pendingExecution = { code };
+    this.connect();
   }
 
   sendInput(userInput: string) {
@@ -80,6 +117,10 @@ export class QuantumSocketManager {
 
   getIsConnected() {
     return this.isConnected;
+  }
+
+  getReadyState() {
+    return this.socket?.readyState;
   }
 }
 

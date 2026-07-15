@@ -68,6 +68,7 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
   // Store refs to terminal functions for output streaming
   const termWriteRef = useRef<(text: string) => void>(() => {});
   const termClearRef = useRef<() => void>(() => {});
+  const onRunCallbackRef = useRef(onRun);
 
   // keep these refs current without remounting the terminal
   useEffect(() => {
@@ -75,7 +76,7 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
   }, [activeFile]);
 
   useEffect(() => {
-    onRunRef.current = onRun;
+    onRunCallbackRef.current = onRun;
   }, [onRun]);
 
   useEffect(() => {
@@ -197,8 +198,39 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
       }
     };
 
+    // Normalize a file path for comparison (remove leading ./ and normalize separators)
+    const normalizePath = (path: string): string => {
+      return path.replace(/^\.\/?/, '').replace(/\\/g, '/');
+    };
+
+    // Check if a file exists in the workspace, supporting relative paths
+    const findFileInWorkspace = (filePath: string): string | null => {
+      if (!filesRef.current) {
+        console.error("Workspace not initialized - filesRef.current is undefined");
+        return null;
+      }
+
+      const normalizedInput = normalizePath(filePath);
+
+      // Direct match first
+      if (filesRef.current[normalizedInput]) {
+        return normalizedInput;
+      }
+
+      // Try exact match (case-sensitive)
+      const exactMatch = Object.keys(filesRef.current).find(f => f === filePath);
+      if (exactMatch) return exactMatch;
+
+      // Try case-insensitive match
+      const caseInsensitiveMatch = Object.keys(filesRef.current)
+        .find(f => f.toLowerCase() === normalizedInput.toLowerCase());
+      if (caseInsensitiveMatch) return caseInsensitiveMatch;
+
+      return null;
+    };
+
     // Execute code directly in the terminal (not via prompt)
-    const executeCode = (command: string, codeContent?: string) => {
+    const executeCode = (command: string) => {
       const parts = command.trim().split(/\s+/);
       const action = parts[0].toLowerCase();
       const fileName = parts[1];
@@ -216,39 +248,64 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
         return;
       }
 
-      if (!filesRef.current[fileName]) {
+      // Find the file in workspace (supports relative paths like src/main.sa)
+      const filePath = findFileInWorkspace(fileName);
+
+      if (!filePath) {
         term.writeln(`File not found: ${fileName}`);
         term.write(getPrompt());
         return;
       }
 
-      // Show execution status
-      term.writeln(``);
-      term.writeln(`\x1b[33m[Status]\x1b[0m Running ${action} ${fileName}...`);
-      term.writeln(`\x1b[33m[Status]\x1b[0m Connecting to backend...`);
-
       setIsExecuting(true);
 
-      // Get the code from the files ref
-      const code = codeContent || filesRef.current[fileName] || '';
+      // Get the code from the files ref (uses current editor contents)
+      const code = filesRef.current[filePath] || '';
 
-      // Connect and execute via socket
-      socketManager.connect();
+      // Check for empty file
+      if (!code.trim()) {
+        term.writeln('\x1b[33mWarning: File is empty\x1b[0m');
+        term.writeln(`\x1b[31mExecution failed: ${filePath}\x1b[0m`);
+        setIsExecuting(false);
+        term.write(getPrompt());
+        return;
+      }
+
+      // Execute via socket (connects automatically if needed)
       socketManager.runScript(code);
     };
 
     // Setup output streaming from socket manager
     socketManager.onOutputReceived = (text: string) => {
+      // Check if output ends with a prompt signal (from process_completion)
+      if (text.includes('[Process Completed]')) {
+        setIsExecuting(false);
+        // Don't write the completion message, just ensure prompt shows
+        term.write('\r\n' + getPrompt());
+        return;
+      }
+
+      // Check for connection messages in debug mode
+      if (text.includes('Connected to Quantum Server')) {
+        return; // Skip the connection message
+      }
+
       if (termWriteRef.current) {
         termWriteRef.current(text);
       }
     };
 
     const submitCommand = () => {
+      console.log("submitCommand called");
       const command = lineBufferRef.current.trim();
+      console.log("command:", command);
       moveToBlockEnd();
       term.write('\r\n');
       lastCursorRowRef.current = 0;
+
+      const parts = command.split(/\s+/);
+      console.log("parts:", parts);
+      console.log("onRunRef.current:", onRunRef.current);
 
       if (command === 'clear') {
         term.clear();
@@ -263,9 +320,11 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
       } else if (command.length > 0) {
         const parts = command.split(/\s+/);
         if ((parts[0] === 'quantum' || parts[0] === 'qrun') && parts[1]) {
-          // Execute code directly without going through placeholder
+          // Execute code directly
           executeCode(command);
         } else {
+          // Print the command echo first, then the help message
+          term.writeln(command);
           term.writeln(`Type \`quantum <file>.sa\` or \`qrun <file>.sa\` to run.`);
         }
       }
@@ -407,7 +466,10 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
         const parts = uptoCursor.split(' ');
         const partial = parts[parts.length - 1];
         if (partial.length === 0) return;
-        const candidates = Object.keys(filesRef.current).filter((f) => f.startsWith(partial));
+        const candidates = Object.keys(filesRef.current).filter((f) => {
+          const normalized = normalizePath(f);
+          return normalized.startsWith(partial) || f.toLowerCase().startsWith(partial.toLowerCase());
+        });
         if (candidates.length === 1) {
           insertAtCursor(candidates[0].slice(partial.length));
         } else if (candidates.length > 1) {
