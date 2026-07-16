@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
-import QuantumTerminal from './terminal/QuantumTerminal';
-import { socketManager } from '../socket/socketManager'; // Added Socket Manager Import
+
+import QuantumTerminal, { QuantumTerminalHandle } from './terminal/QuantumTerminal';
 import React from 'react';
 import { motion } from 'motion/react';
 import { 
@@ -37,29 +37,9 @@ function levenshteinDistance(left: string, right: string) {
   return previous[right.length];
 }
 
-function runKnownSample(code: string): string[] | null {
-  if (code.includes('socket(') && code.includes('listen(')) {
-    const portMatch = code.match(/SecureServer\(\s*(\d+)\s*\)/) || code.match(/listen\(\s*(\d+)\s*\)/);
-    const port = portMatch ? portMatch[1] : '8080';
-    return [`Quantum Server listening on port ${port}`];
-  }
-
-  const similarityMatch = code.match(/checkSimilarity\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)/);
-  if (code.includes('levenshtein(') && similarityMatch) {
-    const left = similarityMatch[1];
-    const right = similarityMatch[2];
-    const distance = levenshteinDistance(left, right);
-    const score = 100 - ((distance / Math.max(left.length, right.length)) * 100);
-    const formatted = Number.isInteger(score) ? String(score) : score.toFixed(1).replace(/\.0$/, '');
-    return [`Similarity: ${formatted}%`];
-  }
-
-  return null;
-}
 
 export const QuantumIDE = () => {
   const { theme } = useTheme();
-  const executionApiBase = import.meta.env.VITE_EXECUTION_API_URL ?? '/api';
   const starterScript = `print("Hello, Quantum!")`;
   const [files, setFiles] = React.useState<{ [key: string]: string }>(() => {
     const saved = localStorage.getItem('quantum_files');
@@ -78,15 +58,15 @@ export const QuantumIDE = () => {
     return {
       'main.sa': starterScript,
       'utils.sa': `// String distance utility
-fn checkSimilarity(string s1, string s2) {
-    int distance = levenshtein(s1, s2);
-    int maxLength = max(s1.length(), s2.length());
-    return (1.0 - (distance / maxLength)) * 100;
-}
+      fn checkSimilarity(string s1, string s2) {
+        int distance = levenshtein(s1, s2);
+        int maxLength = max(s1.length(), s2.length());
+        return (1.0 - (distance / maxLength)) * 100;
+      }
 
-print("Similarity: " + checkSimilarity("quantum", "quantize") + "%");`,
+      print("Similarity: " + checkSimilarity("quantum", "quantize") + "%");`,
       'server.sa': `class SecureServer {
-    function init(int port) {
+      function init(int port) {
         this.port = port;
         this.socket = socket("tcp");
     }
@@ -115,7 +95,7 @@ srv.start();`
     return 'main.sa';
   });
   
-  const [output, setOutput] = React.useState<string[]>([]);
+ 
   const [isExecuting, setIsExecuting] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [newFileName, setNewFileName] = React.useState('');
@@ -124,6 +104,7 @@ srv.start();`
   const [isFullScreen, setIsFullScreen] = React.useState(false);
   
   const editorRef = React.useRef<HTMLTextAreaElement>(null);
+  const terminalRef = React.useRef<QuantumTerminalHandle>(null);
   const preRef = React.useRef<HTMLDivElement>(null);
   const lineNumRef = React.useRef<HTMLDivElement>(null);
   const measurerRef = React.useRef<HTMLSpanElement>(null);
@@ -349,67 +330,8 @@ if (caretAbsoluteX > visibleRight - bufferX) {
 
   const runCode = async () => {
     setIsExecuting(true);
-    const codeContent = files[activeFile] || '';
-
-    // --- NEW WEBSOCKET INTEGRATION ---
-    // Triggers the WebSocket connection instead of the HTTP fetch
-    socketManager.runScript(codeContent);
-    setTimeout(() => setIsExecuting(false), 500); // Visual reset for the button
-    return; // Bypass the old HTTP logic below without removing it
-    // ---------------------------------
-
-    // --- OLD LOGIC PRESERVED BELOW ---
-    /*
-    setOutput(['Connecting to remote engine...', 'Executing code...']);
-    
-    const localResult = runKnownSample(codeContent);
-    if (localResult) {
-      setOutput(localResult);
-      setIsExecuting(false);
-      return;
-    }
-    
-    const dynamicExt = activeFile.substring(activeFile.lastIndexOf('.'));
-
-    try {
-      const response = await fetch(`${executionApiBase}/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          code: codeContent,
-          ext: dynamicExt
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-      const finalOutput =
-      data.compiledOutput ||
-      data.output ||
-      "Program executed with no output";
-
-      setOutput(finalOutput.split(/\r?\n/));
-    } else {
-      const errorOutput =
-      data.compilerError ||
-      data.error ||
-      "Unknown runtime error";
-
-      setOutput(["Execution Failed:", ...errorOutput.split(/\r?\n/)]);
-    }
-    } catch (error) {
-      setOutput([
-        'Network Error: Failed to establish connection with execution backend API.',
-        'Make sure your local backend is running on port 5000.'
-      ]);
-      console.error("Execution failed:", error);
-    } finally {
-      setIsExecuting(false);
-    }
-    */
+    terminalRef.current?.runFile(activeFile);
+    setTimeout(() => setIsExecuting(false), 500);
   };
 
   const createFile = () => {
@@ -716,7 +638,7 @@ if (caretAbsoluteX > visibleRight - bufferX) {
                     <span className="text-[10px] font-bold text-black/40 dark:text-white/40 uppercase tracking-widest">Output Terminal</span>
                   </div>
                   <button 
-                    onClick={() => setOutput([])} 
+                    onClick={() => terminalRef.current?.clear()} 
                     className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 text-[10px] text-black/30 dark:text-white/30 hover:text-black/60 dark:hover:text-white/60 uppercase font-bold transition-all"
                   >
                     <Trash2 className="w-3 h-3" />
@@ -726,7 +648,7 @@ if (caretAbsoluteX > visibleRight - bufferX) {
 
                 {/* NEW XTERM WEBSOCKET TERMINAL */}
                 <div className="flex-1 w-full h-full overflow-hidden bg-transparent">
-                  <QuantumTerminal files={files} activeFile={activeFile} />
+                  <QuantumTerminal ref={terminalRef} files={files} activeFile={activeFile} />
                 </div>
 
                 {/* ORIGINAL FALLBACK OUTPUT (Commented out to preserve official code)

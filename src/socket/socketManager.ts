@@ -1,5 +1,6 @@
 interface ExecutionRequest {
   code: string;
+  ext: string;
 }
 
 const isDebugMode = process.env.NODE_ENV === 'development' || process.env.VITE_DEBUG === 'true';
@@ -32,7 +33,7 @@ export class QuantumSocketManager {
 
       // Process any pending execution request
       if (this.pendingExecution) {
-        this.socket?.send(JSON.stringify({ type: "run", payload: this.pendingExecution.code }));
+        this.socket?.send(JSON.stringify({ type: "run", payload: this.pendingExecution.code, ext: this.pendingExecution.ext }));
         this.pendingExecution = null;
       }
     };
@@ -87,19 +88,19 @@ export class QuantumSocketManager {
     }
   }
 
-  runScript(code: string) {
+  runScript(code: string, ext: string = '.sa') {
     if (this.socket?.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify({ type: "run", payload: code }));
+      this.socket.send(JSON.stringify({ type: "run", payload: code, ext }));
       return;
     }
 
     if (this.socket?.readyState === WebSocket.CONNECTING) {
-      this.pendingExecution = { code };
+      this.pendingExecution = { code, ext};
       return;
     }
 
     // No valid connection - store pending and trigger connect
-    this.pendingExecution = { code };
+    this.pendingExecution = { code, ext };
     this.connect();
   }
 
