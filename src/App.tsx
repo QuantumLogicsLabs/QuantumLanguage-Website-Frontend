@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { scrollToSection } from './hooks/useGlobalSearchNavigation';
 
 // --- Components ---
 import { Navbar } from './components/Navbar';
@@ -40,6 +41,19 @@ export default function App() {
       window.scrollTo(0, 0);
     }
   }, [pathname]);
+
+  // Handle state-based scroll (e.g. from global search navigation)
+  React.useEffect(() => {
+    if (location.state && typeof location.state === 'object' && 'scrollTo' in location.state) {
+      const targetSection = (location.state as { scrollTo: string }).scrollTo;
+      if (targetSection) {
+        navigate(location.pathname, { replace: true, state: {} });
+        requestAnimationFrame(() => {
+          scrollToSection(targetSection);
+        });
+      }
+    }
+  }, [location, navigate]);
 
   // Handle hash-based scroll after route transition completes
   React.useEffect(() => {

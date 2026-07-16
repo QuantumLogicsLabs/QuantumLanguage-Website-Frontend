@@ -14,6 +14,7 @@ import {
   History,
   HelpCircle
 } from 'lucide-react';
+import { useGlobalSearchNavigation } from '../hooks/useGlobalSearchNavigation';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -74,6 +75,8 @@ export const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
     });
   }, [query]);
 
+  const { navigateToSection } = useGlobalSearchNavigation();
+
   const handleSelect = (action: ActionItem) => {
     setQuery(action.label);
     if (action.type === 'route') {
@@ -81,8 +84,7 @@ export const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
     } else if (action.type === 'external') {
       window.open(action.target, '_blank');
     } else {
-      const el = document.getElementById(action.target);
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
+      navigateToSection(action.target);
     }
     onClose();
   };
