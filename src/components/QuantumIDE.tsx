@@ -350,10 +350,11 @@ if (caretAbsoluteX > visibleRight - bufferX) {
   const runCode = async () => {
     setIsExecuting(true);
     const codeContent = files[activeFile] || '';
+    const extension = activeFile.substring(activeFile.lastIndexOf('.')) || '.sa';
 
     // --- NEW WEBSOCKET INTEGRATION ---
     // Triggers the WebSocket connection instead of the HTTP fetch
-    socketManager.runScript(codeContent);
+    socketManager.runScript(codeContent, extension);
     setTimeout(() => setIsExecuting(false), 500); // Visual reset for the button
     return; // Bypass the old HTTP logic below without removing it
     // ---------------------------------

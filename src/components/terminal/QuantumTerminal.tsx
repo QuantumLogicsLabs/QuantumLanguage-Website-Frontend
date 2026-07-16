@@ -271,8 +271,11 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
         return;
       }
 
+      // Get file extension from the file path
+      const extension = filePath.substring(filePath.lastIndexOf('.')) || '.sa';
+
       // Execute via socket (connects automatically if needed)
-      socketManager.runScript(code);
+      socketManager.runScript(code, extension);
     };
 
     // Setup output streaming from socket manager
