@@ -276,6 +276,13 @@ const QuantumTerminal =  forwardRef<QuantumTerminalHandle, QuantumTerminalProps>
         return;
       }
 
+      // Keep the prompt label in sync with the file actually being run.
+      // activeFileRef normally updates via a useEffect watching the
+      // activeFile prop, but that update can lag behind a Run click
+      // (React effect timing), leaving the prompt showing the previously
+      // active file instead of the one that's actually executing.
+      activeFileRef.current = filePath;
+
       onRunCallbackRef.current?.(filePath);
       socketManager.stopScript();
 
