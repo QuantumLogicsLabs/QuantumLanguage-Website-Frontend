@@ -342,6 +342,7 @@ if (caretAbsoluteX > visibleRight - bufferX) {
     newFileName.endsWith('.js') ||
     newFileName.endsWith('.py') ||
     newFileName.endsWith('.cpp') ||
+    newFileName.endsWith('.rb') ||
     newFileName.endsWith('.c');
     const name = hasValidExt ? newFileName : `${newFileName}.sa`;
     
@@ -351,7 +352,8 @@ if (caretAbsoluteX > visibleRight - bufferX) {
     if (name.endsWith('.js')) defaultContent = '// New JavaScript File\nconsole.log("Hello from JS!");\n';
     if (name.endsWith('.py')) defaultContent = '# New Python File\nprint("Hello from Python!")\n';
     if (name.endsWith('.cpp')) defaultContent = '#include <iostream>\n\nint main() {\n    std::cout << "Hello from C++!" << std::endl;\n    return 0;\n}\n';
-    
+    if (name.endsWith('.rb')) defaultContent = '# New Ruby File\nputs "Hello from Ruby!"\n';
+    if (name.endsWith('.c')) defaultContent = '#include <stdio.h>\n\nint main() {\n    printf("Hello from C!\\n");\n    return 0;\n}\n';
     setFiles(prev => ({ ...prev, [name]: defaultContent }));
     setActiveFile(name);
     setNewFileName('');
