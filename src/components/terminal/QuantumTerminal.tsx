@@ -72,12 +72,14 @@ const QuantumTerminal =  forwardRef<QuantumTerminalHandle, QuantumTerminalProps>
   const lastRunFileRef = useRef<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFocused, setIsFocused] = useState(false);
-  const [isExecuting, setIsExecuting] = useState(false);
+  const isExecutingRef = useRef(false);
+  const isInputModeRef = useRef(false);
 
   // Store refs to terminal functions for output streaming
   const termWriteRef = useRef<(text: string) => void>(() => {});
   const termClearRef = useRef<() => void>(() => {});
   const onRunCallbackRef = useRef(onRun);
+  const inputBufferRef = useRef<string>('');
 
   // keep these refs current without remounting the terminal
   useEffect(() => {
@@ -286,14 +288,14 @@ const QuantumTerminal =  forwardRef<QuantumTerminalHandle, QuantumTerminalProps>
       
       lastRunFileRef.current = filePath;
 
-      setIsExecuting(true);
+      isExecutingRef.current = true;
       const code = filesRef.current[filePath] || '';
 
       // Check for empty file
       if (!code.trim()) {
         term.writeln('\x1b[33mWarning: File is empty\x1b[0m');
         term.writeln(`\x1b[31mExecution failed: ${filePath}\x1b[0m`);
-        setIsExecuting(false);
+        isExecutingRef.current = false;
         term.write(getPrompt());
         return;
       }
@@ -301,13 +303,15 @@ const QuantumTerminal =  forwardRef<QuantumTerminalHandle, QuantumTerminalProps>
       // Execute via socket (connects automatically if needed)
       const ext = filePath.slice(filePath.lastIndexOf('.'));
       socketManager.runScript(code, ext);
+      isInputModeRef.current = true;
     };
 
     // Setup output streaming from socket manager
     socketManager.onOutputReceived = (text: string) => {
       // Check if output ends with a prompt signal (from process_completion)
       if (text.includes('[Process Completed]')) {
-        setIsExecuting(false);
+        isExecutingRef.current = false;
+        isInputModeRef.current = false;
         // Don't write the completion message, just ensure prompt shows
         term.write('\r\n' + getPrompt());
         return;
@@ -400,6 +404,32 @@ const QuantumTerminal =  forwardRef<QuantumTerminalHandle, QuantumTerminalProps>
     term.onData((data) => {
       const code = data.charCodeAt(0);
 
+      // --- INPUT MODE ---
+      if (isInputModeRef.current) {
+        if (data === '\r') {
+          term.write('\r\n');
+          socketManager.sendInput(inputBufferRef.current + '\n');
+          inputBufferRef.current = '';
+        } else if (code === 127) { // Backspace
+          if (inputBufferRef.current.length > 0) {
+            inputBufferRef.current = inputBufferRef.current.slice(0, -1);
+            term.write('\b \b');
+          }
+        } else if (code === 3) { // Ctrl+C
+          socketManager.stopScript();
+          term.write('^C\r\n');
+          inputBufferRef.current = '';
+          isInputModeRef.current = false;
+          term.write(getPrompt());
+        } else if (code >= 32) {
+          inputBufferRef.current += data;
+          term.write(data);
+        }
+        // STRICTLY EXIT HERE IN INPUT MODE
+        return;
+      }
+
+      // --- COMMAND MODE ---
       if (data === '\r') {
         submitCommand();
       } else if (data === '\x1b[A') {
