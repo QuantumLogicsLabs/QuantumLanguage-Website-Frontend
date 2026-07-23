@@ -1,5 +1,6 @@
 import React from 'react';
 import { BookOpen, Activity, ChevronRight } from 'lucide-react';
+import { env } from '../config/env';
 
 export const Ecosystem = () => (
   <section id="ecosystem" className="py-24 bg-zinc-50 dark:bg-zinc-950 border-t border-black/5 dark:border-white/5 transition-colors duration-300">
@@ -26,7 +27,7 @@ export const Ecosystem = () => (
             A deep-dive repository that breaks down the compiler architecture, VM internals, 
             and standard library implementation for contributors and power users.
           </p>
-          <a href="https://github.com/SENODROOM/QuantumLangCodeExplaination" target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-black dark:text-white hover:text-cyan-600 dark:hover:text-cyan-400 flex items-center gap-2 transition-colors">
+          <a href={env.GITHUB_CODE_EXPLANATION_URL} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-black dark:text-white hover:text-cyan-600 dark:hover:text-cyan-400 flex items-center gap-2 transition-colors">
             Explore Documentation <ChevronRight className="w-4 h-4" />
           </a>
         </div>
@@ -44,7 +45,7 @@ export const Ecosystem = () => (
             An automated tool that ensures the documentation is always in sync with the 
             latest language changes, providing real-time updates for developers.
           </p>
-          <a href="https://github.com/SENODROOM/Quantum-Docs-Syncer" target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-black dark:text-white hover:text-cyan-600 dark:hover:text-cyan-400 flex items-center gap-2 transition-colors">
+          <a href={env.GITHUB_DOCS_SYNCER_URL} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-black dark:text-white hover:text-cyan-600 dark:hover:text-cyan-400 flex items-center gap-2 transition-colors">
             View on GitHub <ChevronRight className="w-4 h-4" />
           </a>
         </div>

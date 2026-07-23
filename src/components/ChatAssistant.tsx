@@ -6,6 +6,7 @@ import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import Lottie from 'lottie-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
+import { env } from '../config/env';
 import liveChatbotAnimation from '../assets/live-chatbot.json';
 import ligaHistoryAnimation from '../assets/liga-history.json';
 
@@ -99,7 +100,7 @@ const STARTER_PROMPTS = [
   { text: "How do I build Quantum and run programs?", label: "Build & CLI Reference" }
 ];
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE = env.API_URL;
 
 export const ChatAssistant = () => {
   const { theme } = useTheme();
