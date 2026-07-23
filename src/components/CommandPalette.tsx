@@ -15,6 +15,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { useGlobalSearchNavigation } from '../hooks/useGlobalSearchNavigation';
+import { env } from '../config/env';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -35,7 +36,7 @@ const actions: ActionItem[] = [
   { icon: <BookOpen className="w-4 h-4" />, label: 'Blog', target: 'blog' },
   { icon: <HelpCircle className="w-4 h-4" />, label: 'FAQ', target: 'faq' },
   { icon: <Download className="w-4 h-4" />, label: 'Download', target: '/download', type: 'route' },
-  { icon: <GithubIcon className="w-4 h-4" />, label: 'GitHub', target: 'https://github.com/SENODROOM/Quantum-Language', type: 'external' }
+  { icon: <GithubIcon className="w-4 h-4" />, label: 'GitHub', target: env.GITHUB_REPO_URL, type: 'external' }
 ];
 
 export const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
