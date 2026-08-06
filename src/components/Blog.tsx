@@ -1,12 +1,51 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
 import { ChevronRight, Clock, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { blogs } from '../data/blogs';
+import { blogs, BlogPost } from '../data/blogs';
+
+/**
+ * Returns 3 featured blogs:
+ * - Slot 1: Always spotlights the newest / most recently published blog post.
+ * - Slots 2 & 3: Uses a date-seeded PRNG (Mulberry32) to randomly pick and shuffle 2 blogs from all remaining archive articles every midnight.
+ */
+function getDailyFeaturedBlogs(allBlogs: BlogPost[], count: number = 3): BlogPost[] {
+  if (allBlogs.length === 0) return [];
+  if (allBlogs.length <= count) return allBlogs;
+
+  // 1. Slot 1: Always pick the newest post (last item in array)
+  const latestPost = allBlogs[allBlogs.length - 1];
+  const remainingBlogs = allBlogs.slice(0, allBlogs.length - 1);
+
+  // 2. Slots 2 & 3: Date-seeded PRNG random shuffle of remaining archive posts
+  const todayStr = new Date().toISOString().slice(0, 10);
+  let seed = 0;
+  for (let i = 0; i < todayStr.length; i++) {
+    seed = (seed << 5) - seed + todayStr.charCodeAt(i);
+    seed |= 0;
+  }
+  seed = Math.abs(seed);
+
+  const seededRandom = () => {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  const shuffled = [...remainingBlogs];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(seededRandom() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  const archivePicked = shuffled.slice(0, count - 1);
+  return [latestPost, ...archivePicked];
+}
 
 export const Blog = () => {
- // Reverses the array to pick the 3 newest additions first!
-const latestPosts = [...blogs].reverse().slice(0, 3);
+  // Selects 3 daily featured posts (1 latest + 2 daily shuffled archive posts)
+  const latestPosts = useMemo(() => getDailyFeaturedBlogs(blogs, 3), []);
 
   return (
     <section id="blog" className="py-32 bg-white dark:bg-black transition-colors duration-300 border-t border-black/5 dark:border-white/5 relative overflow-hidden">
@@ -45,44 +84,37 @@ const latestPosts = [...blogs].reverse().slice(0, 3);
                 className="group block h-full bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/10 rounded-[28px] p-6 shadow-sm hover:shadow-xl hover:shadow-cyan-500/5 hover:-translate-y-2 hover:border-cyan-500/30 transition-all duration-300 flex flex-col justify-between"
               >
                 <div>
-                  {/* Featured Image */}
-                  <div className="aspect-[16/10] bg-black/5 dark:bg-white/5 rounded-2xl mb-6 overflow-hidden border border-black/5 dark:border-white/5 relative">
+                  <div className="relative aspect-[16/9] rounded-2xl overflow-hidden mb-6 bg-black/5 dark:bg-white/5">
                     <img 
                       src={post.coverImage} 
                       alt={post.title}
-                      loading="lazy"
-                      className="w-full h-full object-cover scale-100 group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  </div>
-
-                  {/* Badges & Meta */}
-                  <div className="flex items-center justify-between gap-4 mb-4">
-                    <span className="px-3 py-1 bg-black/5 dark:bg-white/5 rounded-full text-[10px] font-bold uppercase tracking-widest text-cyan-600 dark:text-cyan-400 border border-black/5 dark:border-white/10">
+                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1 rounded-full text-xs font-semibold text-cyan-400 uppercase tracking-wider">
                       {post.category}
-                    </span>
-                    <div className="flex items-center gap-1.5 text-xs text-black/30 dark:text-white/30 font-semibold uppercase tracking-wider">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>{post.readingTime}</span>
                     </div>
                   </div>
 
-                  <div className="text-xs text-black/40 dark:text-white/40 font-bold uppercase tracking-widest mb-3">
-                    {post.date}
+                  <div className="flex items-center gap-4 text-xs text-black/40 dark:text-white/40 mb-3">
+                    <span>{post.date}</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      {post.readingTime}
+                    </span>
                   </div>
 
-                  <h3 className="text-xl font-bold text-black dark:text-white mb-3 group-hover:text-cyan-500 dark:group-hover:text-cyan-400 transition-colors duration-300 leading-tight">
+                  <h3 className="text-xl font-bold text-black dark:text-white mb-3 group-hover:text-cyan-500 dark:group-hover:text-cyan-400 transition-colors line-clamp-2">
                     {post.title}
                   </h3>
 
-                  <p className="text-black/50 dark:text-white/50 text-sm leading-relaxed mb-6 line-clamp-3">
+                  <p className="text-black/60 dark:text-white/60 text-sm line-clamp-3 leading-relaxed mb-6">
                     {post.excerpt}
                   </p>
                 </div>
 
-                <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-black/80 dark:text-white/80 group-hover:text-cyan-500 dark:group-hover:text-cyan-400 transition-colors duration-300">
-                  Read Article 
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
+                <div className="flex items-center gap-2 text-sm font-semibold text-cyan-600 dark:text-cyan-400 group-hover:gap-3 transition-all duration-300">
+                  Read Article <ArrowRight className="w-4 h-4" />
                 </div>
               </Link>
             </motion.div>

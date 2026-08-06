@@ -21,7 +21,12 @@ export class QuantumSocketManager {
       this.disconnect();
     }
 
-    this.socket = new WebSocket("ws://localhost:5000");
+    let wsUrl = "ws://localhost:5000";
+    const apiBase = import.meta.env.VITE_API_URL;
+    if (apiBase) {
+      wsUrl = apiBase.replace(/^http/, "ws").replace(/\/$/, "");
+    }
+    this.socket = new WebSocket(wsUrl);
 
     this.socket.onopen = () => {
       this.isConnected = true;
