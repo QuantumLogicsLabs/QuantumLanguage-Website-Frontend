@@ -29,6 +29,7 @@ import { Ecosystem } from './components/Ecosystem';
 import { Installation } from './components/Installation';
 import { Newsletter } from './components/Newsletter';
 import { ChatAssistant } from './components/ChatAssistant';
+import { PackageManager } from './components/PackageManager';
 
 export default function App() {
   const location = useLocation();
@@ -98,6 +99,7 @@ export default function App() {
                     }
                   }} />
                   <Features />
+                  <PackageManager/>
                   <LanguageComparison />
                   <SyntaxVersatility />
                   <QuantumIDE />

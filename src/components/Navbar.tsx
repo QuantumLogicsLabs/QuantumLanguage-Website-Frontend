@@ -59,6 +59,7 @@ export const Navbar = () => {
             <a href="#ide" onClick={(e) => handleNavClick(e, 'ide')} className="hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">IDE</a>
             <a href="#blog" onClick={(e) => handleNavClick(e, 'blog')} className="hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">Blog</a>
             <a href="#faq" onClick={(e) => handleNavClick(e, 'faq')} className="hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">FAQ</a>
+            <a href="#qpm" onClick={(e) => handleNavClick(e, 'qpm')} className="hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">QPM</a>
             <a href="https://github.com/SENODROOM/Quantum-Language" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">
               <GithubIcon className="w-4 h-4" /> GitHub
             </a>
@@ -122,6 +123,7 @@ export const Navbar = () => {
                 <a href="#ide" onClick={(e) => handleNavClick(e, 'ide')} className="text-lg font-bold hover:text-cyan-500 transition-colors">IDE</a>
                 <a href="#blog" onClick={(e) => handleNavClick(e, 'blog')} className="text-lg font-bold hover:text-cyan-500 transition-colors">Blog</a>
                 <a href="#faq" onClick={(e) => handleNavClick(e, 'faq')} className="text-lg font-bold hover:text-cyan-500 transition-colors">FAQ</a>
+                <a href="#qpm" onClick={(e) => handleNavClick(e, 'qpm')} className="text-lg font-bold hover:text-cyan-500 transition-colors">QPM</a>
                 <Link to="/download" onClick={() => setIsMenuOpen(false)} className="text-lg font-bold text-cyan-500">Download</Link>
               </div>
             </motion.div>
