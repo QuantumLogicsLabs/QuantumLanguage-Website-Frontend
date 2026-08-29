@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -48,19 +48,28 @@ const findNextWordBoundary = (text: string, pos: number) => {
   return i;
 };
 
-export default function QuantumTerminal({ files, activeFile, onRun, theme = "dark" }: QuantumTerminalProps) {
+export interface QuantumTerminalHandle {
+  runFile: (file: string) => void;
+  clear: () => void;
+}
+
+const QuantumTerminal =  forwardRef<QuantumTerminalHandle, QuantumTerminalProps>(
+  function QuantumTerminalComponent({ files, activeFile, onRun, theme = "dark" }: QuantumTerminalProps, ref){
+
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const lineBufferRef = useRef<string>('');
   const cursorPosRef = useRef<number>(0);
+  const executeCodeRef = useRef<(command: string) => void>(() => {});
   const lastCursorRowRef = useRef<number>(0);
   const undoStackRef = useRef<{ text: string; cursor: number }[]>([]);
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef<number>(0);
   const activeFileRef = useRef<string | undefined>(activeFile);
-  const onRunRef = useRef(onRun);
+
   const filesRef = useRef(files);
+  const lastRunFileRef = useRef<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFocused, setIsFocused] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -74,6 +83,7 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
   useEffect(() => {
     activeFileRef.current = activeFile;
   }, [activeFile]);
+  
 
   useEffect(() => {
     onRunCallbackRef.current = onRun;
@@ -82,6 +92,15 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
+ 
+  useImperativeHandle(ref, () => ({
+    runFile: (file: string) => {
+      executeCodeRef.current(`qrun ${file}`)
+    },
+    clear: () => {
+      termClearRef.current?.();
+    }
+  }))
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -257,9 +276,17 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
         return;
       }
 
-      setIsExecuting(true);
+      onRunCallbackRef.current?.(filePath);
+      socketManager.stopScript();
 
       // Get the code from the files ref (uses current editor contents)
+      if(lastRunFileRef.current && lastRunFileRef.current !== filePath){
+        term.clear();
+      }
+      
+      lastRunFileRef.current = filePath;
+
+      setIsExecuting(true);
       const code = filesRef.current[filePath] || '';
 
       // Check for empty file
@@ -277,7 +304,8 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
         : '.sa';
 
       // Execute via socket (connects automatically if needed)
-      socketManager.runScript(code, fileExt);
+      const ext = filePath.slice(filePath.lastIndexOf('.'));
+      socketManager.runScript(code, ext);
     };
 
     // Setup output streaming from socket manager
@@ -301,16 +329,13 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
     };
 
     const submitCommand = () => {
-      console.log("submitCommand called");
+    
       const command = lineBufferRef.current.trim();
-      console.log("command:", command);
       moveToBlockEnd();
       term.write('\r\n');
       lastCursorRowRef.current = 0;
 
       const parts = command.split(/\s+/);
-      console.log("parts:", parts);
-      console.log("onRunRef.current:", onRunRef.current);
 
       if (command === 'clear') {
         term.clear();
@@ -502,12 +527,32 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
     // Update refs for output streaming
     termWriteRef.current = (text: string) => term.write(text);
     termClearRef.current = () => term.clear();
+    executeCodeRef.current = executeCode;
 
     const handleResize = () => fitAddon.fit();
     window.addEventListener('resize', handleResize);
 
     const resizeObserver = new ResizeObserver(() => fitAddon.fit());
     resizeObserver.observe(containerRef.current);
+
+    // FIX: Trackpad two-finger scroll — intercept wheel events on the terminal
+    // container and route them directly into xterm's buffer. Without this,
+    // browsers fire a DOM wheel event that travels up to the page scroller
+    // because the xterm canvas element is not a native scrollable element.
+    // We call stopPropagation() + preventDefault() to prevent page scroll,
+    // then manually drive xterm with scrollLines() for a smooth, natural feel.
+    const handleWheel = (e: WheelEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const term = termRef.current;
+      if (!term) return;
+      // deltaY > 0 → scroll down (positive lines), < 0 → scroll up
+      // Use a sensitivity factor of 3 lines per 100px of deltaY for
+      // a feel consistent with native terminal emulators.
+      const lines = Math.round((e.deltaY / 100) * 3) || (e.deltaY > 0 ? 1 : -1);
+      term.scrollLines(lines);
+    };
+    containerRef.current.addEventListener('wheel', handleWheel, { passive: false });
 
     const textareaEl = containerRef.current.querySelector('.xterm-helper-textarea');
     const handleFocus = () => setIsFocused(true);
@@ -519,6 +564,7 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
       clearTimeout(loadingTimer);
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
+      containerRef.current?.removeEventListener('wheel', handleWheel);
       textareaEl?.removeEventListener('focus', handleFocus);
       textareaEl?.removeEventListener('blur', handleBlur);
       term.dispose();
@@ -542,7 +588,19 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
         "relative h-full w-full rounded-md overflow-hidden",
         theme === "dark" ? "bg-[#0D1117]" : "bg-white"
       )}>
-        <div ref={containerRef} className="h-full w-full" />
+        <div
+          ref={containerRef}
+          className="h-full w-full"
+          style={{
+            // FIX: Prevent trackpad scroll from escaping the xterm viewport
+            // and scrolling the outer page. 'touch-action: none' stops the
+            // browser's own touch/trackpad scroll handling on this element,
+            // while 'overscroll-behavior: contain' ensures scroll chaining
+            // is blocked even if a wheel event reaches this container.
+            touchAction: 'none',
+            overscrollBehavior: 'contain',
+          }}
+        />
         {isLoading && (
           <div className={cn(
             "absolute inset-0 flex items-center justify-center",
@@ -559,4 +617,6 @@ export default function QuantumTerminal({ files, activeFile, onRun, theme = "dar
       `}</style>
     </div>
   );
-}
+})
+
+export default QuantumTerminal;

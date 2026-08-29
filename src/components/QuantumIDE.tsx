@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
-import QuantumTerminal from './terminal/QuantumTerminal';
-import { socketManager } from '../socket/socketManager'; // Added Socket Manager Import
+
+import QuantumTerminal, { QuantumTerminalHandle } from './terminal/QuantumTerminal';
 import React from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Terminal, Cpu, Maximize2, Minimize2, Copy, Download, Save, Check, Play, 
   Folder, Plus, FileCode, Trash2, Menu, X 
@@ -37,29 +37,9 @@ function levenshteinDistance(left: string, right: string) {
   return previous[right.length];
 }
 
-function runKnownSample(code: string): string[] | null {
-  if (code.includes('socket(') && code.includes('listen(')) {
-    const portMatch = code.match(/SecureServer\(\s*(\d+)\s*\)/) || code.match(/listen\(\s*(\d+)\s*\)/);
-    const port = portMatch ? portMatch[1] : '8080';
-    return [`Quantum Server listening on port ${port}`];
-  }
-
-  const similarityMatch = code.match(/checkSimilarity\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)/);
-  if (code.includes('levenshtein(') && similarityMatch) {
-    const left = similarityMatch[1];
-    const right = similarityMatch[2];
-    const distance = levenshteinDistance(left, right);
-    const score = 100 - ((distance / Math.max(left.length, right.length)) * 100);
-    const formatted = Number.isInteger(score) ? String(score) : score.toFixed(1).replace(/\.0$/, '');
-    return [`Similarity: ${formatted}%`];
-  }
-
-  return null;
-}
 
 export const QuantumIDE = () => {
   const { theme } = useTheme();
-  const executionApiBase = import.meta.env.VITE_EXECUTION_API_URL ?? '/api';
   const starterScript = `print("Hello, Quantum!")`;
   const [files, setFiles] = React.useState<{ [key: string]: string }>(() => {
     const saved = localStorage.getItem('quantum_files');
@@ -95,15 +75,15 @@ puts "Factorial of 5:"
 puts factorial(5)
 `,
       'utils.sa': `// String distance utility
-fn checkSimilarity(string s1, string s2) {
-    int distance = levenshtein(s1, s2);
-    int maxLength = max(s1.length(), s2.length());
-    return (1.0 - (distance / maxLength)) * 100;
-}
+      fn checkSimilarity(string s1, string s2) {
+        int distance = levenshtein(s1, s2);
+        int maxLength = max(s1.length(), s2.length());
+        return (1.0 - (distance / maxLength)) * 100;
+      }
 
-print("Similarity: " + checkSimilarity("quantum", "quantize") + "%");`,
+      print("Similarity: " + checkSimilarity("quantum", "quantize") + "%");`,
       'server.sa': `class SecureServer {
-    function init(int port) {
+      function init(int port) {
         this.port = port;
         this.socket = socket("tcp");
     }
@@ -132,7 +112,7 @@ srv.start();`
     return 'main.sa';
   });
   
-  const [output, setOutput] = React.useState<string[]>([]);
+ 
   const [isExecuting, setIsExecuting] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [newFileName, setNewFileName] = React.useState('');
@@ -141,6 +121,7 @@ srv.start();`
   const [isFullScreen, setIsFullScreen] = React.useState(false);
   
   const editorRef = React.useRef<HTMLTextAreaElement>(null);
+  const terminalRef = React.useRef<QuantumTerminalHandle>(null);
   const preRef = React.useRef<HTMLDivElement>(null);
   const lineNumRef = React.useRef<HTMLDivElement>(null);
   const measurerRef = React.useRef<HTMLSpanElement>(null);
@@ -167,17 +148,29 @@ srv.start();`
 
   // Keep the line-number gutter's scroll position in sync with the
   // textarea AND the syntax-highlighted overlay.
+  //
+  // ROOT CAUSE OF THE "CODE TEXT STAYS FROZEN" BUG:
+  // The SyntaxHighlighter <pre> element has overflowY:'hidden' in its
+  // customStyle. Setting pre.scrollTop on an overflow-hidden element has
+  // ZERO visual effect — the element refuses to scroll vertically.
+  // The WRAPPER div (preRef.current) uses overflow-hidden on the CSS class
+  // level, but overflow:hidden elements CAN be scrolled programmatically
+  // via JavaScript (they just don't show a scrollbar or respond to user
+  // input). So:
+  //   - Vertical sync → preRef.current.scrollTop  (the wrapper div)
+  //   - Horizontal sync → pre.scrollLeft          (the inner <pre>, which
+  //                                                has overflowX:'auto')
   const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
     const { scrollTop, scrollLeft } = e.currentTarget;
-    
-    if (preRef.current) {
-  const pre = preRef.current.querySelector("pre");
 
-  if (pre) {
-    pre.scrollTop = scrollTop;
-    pre.scrollLeft = scrollLeft;
-  }
-}
+    if (preRef.current) {
+      // Vertical: scroll the wrapper so the <pre> content shifts into view
+      preRef.current.scrollTop = scrollTop;
+      // Horizontal: scroll the inner <pre> which owns horizontal overflow
+      const pre = preRef.current.querySelector('pre');
+      if (pre) pre.scrollLeft = scrollLeft;
+    }
+
     if (lineNumRef.current) {
       lineNumRef.current.scrollTop = scrollTop;
     }
@@ -268,14 +261,13 @@ if (caretAbsoluteX > visibleRight - bufferX) {
     }
 
     scrollCaretIntoView();
-   if (preRef.current) {
-  const pre = preRef.current.querySelector("pre");
-
-  if (pre) {
-    pre.scrollTop = editor.scrollTop;
-    pre.scrollLeft = editor.scrollLeft;
-  }
-}
+    // Sync the overlay and gutter using the same vertical-on-wrapper,
+    // horizontal-on-inner-pre strategy (see handleScroll comment above).
+    if (preRef.current) {
+      preRef.current.scrollTop = editor.scrollTop;
+      const pre = preRef.current.querySelector('pre');
+      if (pre) pre.scrollLeft = editor.scrollLeft;
+    }
     if (lineNumRef.current) {
       lineNumRef.current.scrollTop = editor.scrollTop;
     }
@@ -290,20 +282,20 @@ if (caretAbsoluteX > visibleRight - bufferX) {
 
     const editor = editorRef.current;
 
-    
-
     scrollCaretIntoView();
 
     const { scrollTop, scrollLeft } = editor;
 
+    // Sync overlay and gutter — vertical on wrapper, horizontal on inner pre.
     if (preRef.current) {
- 
+      preRef.current.scrollTop = scrollTop;
+      const pre = preRef.current.querySelector('pre');
+      if (pre) pre.scrollLeft = scrollLeft;
+    }
 
-  preRef.current.scrollTop = scrollTop;
-  preRef.current.scrollLeft = scrollLeft;
-
- 
-}
+    if (lineNumRef.current) {
+      lineNumRef.current.scrollTop = scrollTop;
+    }
   });
 };
 
@@ -366,70 +358,8 @@ if (caretAbsoluteX > visibleRight - bufferX) {
 
   const runCode = async () => {
     setIsExecuting(true);
-    const codeContent = files[activeFile] || '';
-    const dynamicExt = activeFile.includes('.')
-      ? activeFile.substring(activeFile.lastIndexOf('.'))
-      : '.sa';
-
-    // --- WEBSOCKET INTEGRATION ---
-    // Triggers WebSocket execution streaming with file extension
-    socketManager.runScript(codeContent, dynamicExt);
-    setTimeout(() => setIsExecuting(false), 500); // Visual reset for the button
-    return;
-    // -----------------------------
-
-    // --- OLD LOGIC PRESERVED BELOW ---
-    /*
-    setOutput(['Connecting to remote engine...', 'Executing code...']);
-    
-    const localResult = runKnownSample(codeContent);
-    if (localResult) {
-      setOutput(localResult);
-      setIsExecuting(false);
-      return;
-    }
-    
-    const dynamicExt = activeFile.substring(activeFile.lastIndexOf('.'));
-
-    try {
-      const response = await fetch(`${executionApiBase}/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          code: codeContent,
-          ext: dynamicExt
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-      const finalOutput =
-      data.compiledOutput ||
-      data.output ||
-      "Program executed with no output";
-
-      setOutput(finalOutput.split(/\r?\n/));
-    } else {
-      const errorOutput =
-      data.compilerError ||
-      data.error ||
-      "Unknown runtime error";
-
-      setOutput(["Execution Failed:", ...errorOutput.split(/\r?\n/)]);
-    }
-    } catch (error) {
-      setOutput([
-        'Network Error: Failed to establish connection with execution backend API.',
-        'Make sure your local backend is running on port 5000.'
-      ]);
-      console.error("Execution failed:", error);
-    } finally {
-      setIsExecuting(false);
-    }
-    */
+    terminalRef.current?.runFile(activeFile);
+    setTimeout(() => setIsExecuting(false), 500);
   };
 
   const createFile = () => {
@@ -504,12 +434,25 @@ if (caretAbsoluteX > visibleRight - bufferX) {
           {/* Header */}
           <div className="flex items-center justify-between px-4 md:px-6 py-3 bg-[#f8fafc] dark:bg-[#161b22] border-b border-black/10 dark:border-white/10">
             <div className="flex items-center gap-4 md:gap-6">
-              <button 
+              <motion.button 
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-md transition-all text-black/40 dark:text-white/40"
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                className="w-9 h-9 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-cyan-500/30 dark:hover:hover:border-cyan-400/30 text-black/40 dark:text-white/40 hover:text-cyan-500 dark:hover:text-cyan-400 hover:shadow-[0_0_15px_rgba(6,182,212,0.15)] flex items-center justify-center transition-all cursor-pointer"
+                title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
               >
-                {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={isSidebarOpen ? 'close' : 'menu'}
+                    initial={{ rotate: -90, opacity: 0, scale: 0.8 }}
+                    animate={{ rotate: 0, opacity: 1, scale: 1 }}
+                    exit={{ rotate: 90, opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.15, ease: "easeInOut" }}
+                  >
+                    {isSidebarOpen ? <X className="w-4.5 h-4.5" /> : <Menu className="w-4.5 h-4.5" />}
+                  </motion.div>
+                </AnimatePresence>
+              </motion.button>
               <div className="hidden sm:flex gap-2">
                 <div className="w-3 h-3 rounded-full bg-[#ff5f56] shadow-inner" />
                 <div className="w-3 h-3 rounded-full bg-[#ffbd2e] shadow-inner" />
@@ -602,13 +545,15 @@ if (caretAbsoluteX > visibleRight - bufferX) {
                   <Folder className="w-3.5 h-3.5 text-cyan-500" />
                   <span className="text-[10px] font-bold text-black/40 dark:text-white/40 uppercase tracking-widest">Project Files</span>
                 </div>
-                <button 
+                <motion.button 
                   onClick={() => setIsCreateModalOpen(true)}
-                  className="p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-md transition-all text-black/40 dark:text-white/40 hover:text-cyan-500"
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
+                  className="p-2 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-cyan-500/30 dark:hover:hover:border-cyan-400/30 rounded-xl text-black/40 dark:text-white/40 hover:text-cyan-500 dark:hover:text-cyan-400 hover:shadow-[0_0_10px_rgba(6,182,212,0.15)] flex items-center justify-center transition-all cursor-pointer"
                   title="New File"
                 >
                   <Plus className="w-4 h-4" />
-                </button>
+                </motion.button>
               </div>
               <div className="flex-1 p-3 space-y-1 overflow-y-auto custom-scrollbar">
                 {Object.keys(files).map(file => (
@@ -704,7 +649,7 @@ if (caretAbsoluteX > visibleRight - bufferX) {
                     />
                     <div 
                       ref={preRef}
-                      className="absolute inset-0 p-4 md:p-5 font-mono text-xs md:text-sm pointer-events-none overflow-auto leading-[1.6]"
+                      className="absolute inset-0 p-4 md:p-5 font-mono text-xs md:text-sm pointer-events-none overflow-hidden leading-[1.6]"
                     >
                       <SyntaxHighlighter
                         language={getHighlightLanguage(activeFile)}
@@ -746,7 +691,7 @@ if (caretAbsoluteX > visibleRight - bufferX) {
                     <span className="text-[10px] font-bold text-black/40 dark:text-white/40 uppercase tracking-widest">Output Terminal</span>
                   </div>
                   <button 
-                    onClick={() => setOutput([])} 
+                    onClick={() => terminalRef.current?.clear()} 
                     className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 text-[10px] text-black/30 dark:text-white/30 hover:text-black/60 dark:hover:text-white/60 uppercase font-bold transition-all"
                   >
                     <Trash2 className="w-3 h-3" />
@@ -755,8 +700,17 @@ if (caretAbsoluteX > visibleRight - bufferX) {
                 </div>
 
                 {/* NEW XTERM WEBSOCKET TERMINAL */}
-                <div className="flex-1 w-full h-full overflow-hidden bg-transparent">
-                  <QuantumTerminal files={files} activeFile={activeFile} />
+                <div
+                  className="flex-1 w-full h-full overflow-hidden bg-transparent"
+                  style={{
+                    // FIX: Block scroll chaining from the terminal upward into
+                    // the page. When the xterm wheel handler consumes scroll,
+                    // this boundary prevents any residual deltaY from reaching
+                    // the outer page scroll container.
+                    overscrollBehavior: 'contain',
+                  }}
+                >
+                  <QuantumTerminal ref={terminalRef} files={files} activeFile={activeFile} />
                 </div>
 
                 {/* ORIGINAL FALLBACK OUTPUT (Commented out to preserve official code)

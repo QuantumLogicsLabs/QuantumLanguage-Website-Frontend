@@ -1,6 +1,6 @@
 interface ExecutionRequest {
   code: string;
-  ext?: string;
+  ext: string;
 }
 
 const isDebugMode = process.env.NODE_ENV === 'development' || process.env.VITE_DEBUG === 'true';
@@ -21,7 +21,12 @@ export class QuantumSocketManager {
       this.disconnect();
     }
 
-    this.socket = new WebSocket("ws://localhost:5000");
+    let wsUrl = "ws://localhost:5000";
+    const apiBase = import.meta.env.VITE_API_URL;
+    if (apiBase) {
+      wsUrl = apiBase.replace(/^http/, "ws").replace(/\/$/, "");
+    }
+    this.socket = new WebSocket(wsUrl);
 
     this.socket.onopen = () => {
       this.isConnected = true;
@@ -33,11 +38,7 @@ export class QuantumSocketManager {
 
       // Process any pending execution request
       if (this.pendingExecution) {
-        this.socket?.send(JSON.stringify({ 
-          type: "run", 
-          payload: this.pendingExecution.code,
-          ext: this.pendingExecution.ext || ".sa"
-        }));
+        this.socket?.send(JSON.stringify({ type: "run", payload: this.pendingExecution.code, ext: this.pendingExecution.ext }));
         this.pendingExecution = null;
       }
     };
@@ -99,7 +100,7 @@ export class QuantumSocketManager {
     }
 
     if (this.socket?.readyState === WebSocket.CONNECTING) {
-      this.pendingExecution = { code, ext };
+      this.pendingExecution = { code, ext};
       return;
     }
 
