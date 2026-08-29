@@ -1,9 +1,11 @@
+import { env } from '../config/env';
+
 interface ExecutionRequest {
   code: string;
   ext: string;
 }
 
-const isDebugMode = process.env.NODE_ENV === 'development' || process.env.VITE_DEBUG === 'true';
+const isDebugMode = env.IS_DEBUG;
 
 export class QuantumSocketManager {
   private socket: WebSocket | null = null;
@@ -21,12 +23,7 @@ export class QuantumSocketManager {
       this.disconnect();
     }
 
-    let wsUrl = "ws://localhost:5000";
-    const apiBase = import.meta.env.VITE_API_URL;
-    if (apiBase) {
-      wsUrl = apiBase.replace(/^http/, "ws").replace(/\/$/, "");
-    }
-    this.socket = new WebSocket(wsUrl);
+    this.socket = new WebSocket(env.WS_URL);
 
     this.socket.onopen = () => {
       this.isConnected = true;

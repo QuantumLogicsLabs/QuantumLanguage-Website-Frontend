@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Github as GithubIcon, Globe, Terminal } from 'lucide-react';
+import { env } from '../config/env';
 
 export const Footer = () => {
   const { pathname } = useLocation();
@@ -37,8 +38,8 @@ export const Footer = () => {
             </p>
            <div className="flex gap-4">
   {[
-    { Icon: GithubIcon, path: "https://github.com/QuantumLogicsLabs/QuantumLanguage.git", isExternal: true },
-    { Icon: Globe, path: "https://discord.gg/HvgzP4pBJ", isExternal: true },
+    { Icon: GithubIcon, path: env.GITHUB_ORG_URL, isExternal: true },
+    { Icon: Globe, path: env.DISCORD_URL, isExternal: true },
     { Icon: Terminal, path: "#ide", isExternal: false }
   ].map(({ Icon, path, isExternal }, i) => (
     <a 
@@ -70,7 +71,7 @@ export const Footer = () => {
             <li><a href="#blog" onClick={(e) => handleNavClick(e, 'blog')} className="hover:text-cyan-500 transition-colors">Blog</a></li>
             <li><a href="#roadmap" onClick={(e) => handleNavClick(e, 'roadmap')} className="hover:text-cyan-500 transition-colors">Roadmap</a></li>
             <li><a href="#faq" onClick={(e) => handleNavClick(e, 'faq')} className="hover:text-cyan-500 transition-colors">FAQ</a></li>
-            <li><a href="https://github.com/SENODROOM/Quantum-Language" className="hover:text-cyan-500 transition-colors">GitHub</a></li>
+            <li><a href={env.GITHUB_REPO_URL} className="hover:text-cyan-500 transition-colors">GitHub</a></li>
           </ul>
         </div>
         
@@ -81,13 +82,13 @@ export const Footer = () => {
               <div className="w-1.5 h-1.5 bg-current rounded-full animate-pulse" />
               All Systems Operational
             </div>
-            <p className="text-[10px] text-black/30 dark:text-white/30">v2.0.4 Stable Release</p>
+            <p className="text-[10px] text-black/30 dark:text-white/30">{env.APP_VERSION} Stable Release</p>
           </div>
         </div>
       </div>
       
       <div className="pt-8 border-t border-black/5 dark:border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] font-bold text-black/20 dark:text-white/20 uppercase tracking-[0.2em]">
-        <p>© 2026 Quantum Language. Developed by <a href="https://github.com/SENODROOM" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-500 transition-colors">SENODROOM</a>.</p>
+        <p>© 2026 Quantum Language. Developed by <a href={env.GITHUB_AUTHOR_URL} target="_blank" rel="noopener noreferrer" className="hover:text-cyan-500 transition-colors">SENODROOM</a>.</p>
         <div className="flex gap-8">
           <a href="#" className="hover:text-black dark:hover:text-white transition-colors">Privacy Policy</a>
           <a href="#" className="hover:text-black dark:hover:text-white transition-colors">Terms of Service</a>

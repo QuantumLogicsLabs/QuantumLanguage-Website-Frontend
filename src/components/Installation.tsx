@@ -1,5 +1,6 @@
 import React from 'react';
 import { Terminal } from 'lucide-react';
+import { env } from '../config/env';
 
 export const Installation = () => (
   <section className="py-24 bg-zinc-50 dark:bg-zinc-950 border-y border-black/5 dark:border-white/5 relative overflow-hidden transition-colors duration-300">
@@ -20,7 +21,7 @@ export const Installation = () => (
           </div>
           <div className="flex gap-3 pl-6">
             <span className="text-cyan-500">$</span>
-            <span className="text-black dark:text-white">git clone https://github.com/SENODROOM/Quantum-Language.git</span>
+            <span className="text-black dark:text-white">git clone {env.GITHUB_REPO_URL}.git</span>
           </div>
           
           <div className="flex gap-3">

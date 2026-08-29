@@ -1,5 +1,6 @@
 import React from 'react';
 import { Github as GithubIcon, Globe, Terminal } from 'lucide-react';
+import { env } from '../config/env';
 
 export const Community = () => (
   <section className="py-24 bg-zinc-50 dark:bg-zinc-950 border-y border-black/5 dark:border-white/5 transition-colors duration-300">
@@ -19,12 +20,12 @@ export const Community = () => (
         ))}
       </div>
       <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-        <a href="https://github.com/QuantumLogicsLabs/QuantumLanguage.git" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-black dark:text-white hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
+        <a href={env.GITHUB_ORG_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-black dark:text-white hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
           <GithubIcon className="w-5 h-5" />
           <span className="font-bold">Star on GitHub</span>
         </a>
         <div className="w-1 h-1 bg-black/20 dark:bg-white/20 rounded-full hidden sm:block" />
-        <a href="https://discord.gg/HvgzP4pBJ" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-black dark:text-white hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
+        <a href={env.DISCORD_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-black dark:text-white hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
           <Globe className="w-5 h-5" />
           <span className="font-bold">Join Discord</span>
         </a>
