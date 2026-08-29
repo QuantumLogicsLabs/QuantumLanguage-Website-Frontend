@@ -147,7 +147,7 @@ const QuantumTerminal =  forwardRef<QuantumTerminalHandle, QuantumTerminalProps>
     const getPrompt = () => (activeFileRef.current ? `[${activeFileRef.current}] $ ` : '$ ');
 
     term.writeln('\x1b[36mQuantum Terminal\x1b[0m  v2.0.4');
-    term.writeln('Type `quantum <file>.sa` or `qrun <file>.sa` to run a program. Type `help` for shortcuts.');
+    term.writeln('Type `quantum <file>` (e.g. `quantum main.sa` or `quantum ruby_demo.rb`) to run. Type `help` for shortcuts.');
     term.writeln('');
     term.write(getPrompt());
 
@@ -262,7 +262,7 @@ const QuantumTerminal =  forwardRef<QuantumTerminalHandle, QuantumTerminalProps>
       }
 
       if (!fileName) {
-        term.writeln(`Usage: ${action} <filename>.sa`);
+        term.writeln(`Usage: ${action} <filename> (e.g. main.sa, script.rb)`);
         term.write(getPrompt());
         return;
       }
@@ -297,6 +297,11 @@ const QuantumTerminal =  forwardRef<QuantumTerminalHandle, QuantumTerminalProps>
         term.write(getPrompt());
         return;
       }
+
+      // Extract extension (e.g. .rb, .sa, .js, .py, .cpp)
+      const fileExt = filePath.includes('.')
+        ? filePath.substring(filePath.lastIndexOf('.'))
+        : '.sa';
 
       // Execute via socket (connects automatically if needed)
       const ext = filePath.slice(filePath.lastIndexOf('.'));
@@ -350,7 +355,7 @@ const QuantumTerminal =  forwardRef<QuantumTerminalHandle, QuantumTerminalProps>
         } else {
           // Print the command echo first, then the help message
           term.writeln(command);
-          term.writeln(`Type \`quantum <file>.sa\` or \`qrun <file>.sa\` to run.`);
+          term.writeln(`Type \`quantum <file>\` or \`qrun <file>\` to run (e.g. main.sa, ruby_demo.rb).`);
         }
       }
 
