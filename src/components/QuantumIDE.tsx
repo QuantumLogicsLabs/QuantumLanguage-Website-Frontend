@@ -57,6 +57,23 @@ export const QuantumIDE = () => {
     }
     return {
       'main.sa': starterScript,
+      'ruby_demo.rb': `# Ruby Dialect in Quantum
+def greet(name)
+    puts "Hello, " + name + "! Welcome to Quantum."
+end
+
+def factorial(n)
+    if n <= 1
+        1
+    else
+        n * factorial(n - 1)
+    end
+end
+
+greet("Developer")
+puts "Factorial of 5:"
+puts factorial(5)
+`,
       'utils.sa': `// String distance utility
       fn checkSimilarity(string s1, string s2) {
         int distance = levenshtein(s1, s2);
@@ -349,11 +366,12 @@ if (caretAbsoluteX > visibleRight - bufferX) {
     if (!newFileName) return;
     
     const hasValidExt =
-    newFileName.endsWith('.sa') ||
-    newFileName.endsWith('.js') ||
-    newFileName.endsWith('.py') ||
-    newFileName.endsWith('.cpp') ||
-    newFileName.endsWith('.c');
+      newFileName.endsWith('.sa') ||
+      newFileName.endsWith('.js') ||
+      newFileName.endsWith('.py') ||
+      newFileName.endsWith('.rb') ||
+      newFileName.endsWith('.cpp') ||
+      newFileName.endsWith('.c');
     const name = hasValidExt ? newFileName : `${newFileName}.sa`;
     
     if (files[name]) { alert('File already exists'); return; }
@@ -361,12 +379,21 @@ if (caretAbsoluteX > visibleRight - bufferX) {
     let defaultContent = '// New Quantum Script\n';
     if (name.endsWith('.js')) defaultContent = '// New JavaScript File\nconsole.log("Hello from JS!");\n';
     if (name.endsWith('.py')) defaultContent = '# New Python File\nprint("Hello from Python!")\n';
+    if (name.endsWith('.rb')) defaultContent = '# New Ruby File\nputs "Hello from Ruby in Quantum!"\n';
     if (name.endsWith('.cpp')) defaultContent = '#include <iostream>\n\nint main() {\n    std::cout << "Hello from C++!" << std::endl;\n    return 0;\n}\n';
     
     setFiles(prev => ({ ...prev, [name]: defaultContent }));
     setActiveFile(name);
     setNewFileName('');
     setIsCreateModalOpen(false);
+  };
+
+  const getHighlightLanguage = (fileName: string) => {
+    if (fileName.endsWith('.rb')) return 'ruby';
+    if (fileName.endsWith('.py')) return 'python';
+    if (fileName.endsWith('.cpp') || fileName.endsWith('.c')) return 'cpp';
+    if (fileName.endsWith('.js')) return 'javascript';
+    return 'javascript';
   };
 
   const deleteFile = (fileName: string) => {
@@ -625,7 +652,7 @@ if (caretAbsoluteX > visibleRight - bufferX) {
                       className="absolute inset-0 p-4 md:p-5 font-mono text-xs md:text-sm pointer-events-none overflow-hidden leading-[1.6]"
                     >
                       <SyntaxHighlighter
-                        language="javascript"
+                        language={getHighlightLanguage(activeFile)}
                         style={theme === 'dark' ? atomDark : undefined}
                         customStyle={{
   background: 'transparent',
@@ -739,7 +766,7 @@ if (caretAbsoluteX > visibleRight - bufferX) {
             <h3 className="text-xl font-bold text-black dark:text-white mb-4">Create New File</h3>
             <input 
               type="text"
-              placeholder="filename.sa"
+              placeholder="filename.sa or script.rb"
               value={newFileName}
               onChange={(e) => setNewFileName(e.target.value)}
               className="w-full bg-black/5 dark:bg-black border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-black dark:text-white mb-6 outline-none focus:border-cyan-500 transition-colors"

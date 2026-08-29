@@ -123,6 +123,7 @@ export const Navbar = () => {
                 <a href="#ide" onClick={(e) => handleNavClick(e, 'ide')} className="text-lg font-bold hover:text-cyan-500 transition-colors">IDE</a>
                 <a href="#blog" onClick={(e) => handleNavClick(e, 'blog')} className="text-lg font-bold hover:text-cyan-500 transition-colors">Blog</a>
                 <a href="#faq" onClick={(e) => handleNavClick(e, 'faq')} className="text-lg font-bold hover:text-cyan-500 transition-colors">FAQ</a>
+                <a href="#qpm" onClick={(e) => handleNavClick(e, 'qpm')} className="text-lg font-bold hover:text-cyan-500 transition-colors">QPM</a>
                 <Link to="/download" onClick={() => setIsMenuOpen(false)} className="text-lg font-bold text-cyan-500">Download</Link>
               </div>
             </motion.div>
