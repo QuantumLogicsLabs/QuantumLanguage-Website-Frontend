@@ -44,7 +44,7 @@ export const ScrollToTop = () => {
           aria-label="Back to top"
           title="Back to top · drag to move"
           // Default spot sits above the chat launcher (bottom-8, 64px tall) so neither hides the other.
-          className={`fixed bottom-28 right-10 z-[60] p-4 bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-full shadow-2xl group select-none ${
+          className={`fixed bottom-28 right-10 z-60 p-4 bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-full shadow-2xl group select-none ${
             dragging ? 'cursor-grabbing' : 'cursor-grab hover:scale-110 transition-transform'
           }`}
         >
@@ -53,13 +53,13 @@ export const ScrollToTop = () => {
               cx="50%"
               cy="50%"
               r="45%"
-              className="fill-none stroke-black/5 dark:stroke-white/5 stroke-[4]"
+              className="fill-none stroke-black/5 dark:stroke-white/5 stroke-4"
             />
             <circle
               cx="50%"
               cy="50%"
               r="45%"
-              className="fill-none stroke-cyan-500 stroke-[4] transition-all duration-300"
+              className="fill-none stroke-cyan-500 stroke-4 transition-all duration-300"
               style={{
                 strokeDasharray: '283',
                 strokeDashoffset: 283 - (283 * scrollProgress) / 100
