@@ -304,6 +304,32 @@ The project includes a **complete website** with:
 - Interactive examples
 - Mobile-responsive design
 
+### IDE Terminal Shortcuts
+
+The IDE's output terminal (`src/components/terminal/QuantumTerminal.tsx`) supports:
+
+| Shortcut | Action |
+|---|---|
+| `Enter` | Run the typed command |
+| `↑` / `↓` | Browse command history (persisted across sessions via `localStorage`) |
+| `←` / `→` | Move the cursor within the line (works across wrapped rows) |
+| `Ctrl+←` / `Ctrl+→` | Jump by word |
+| `Home` / `End` (or `Ctrl+A` / `Ctrl+E`) | Jump to the start / end of the line |
+| `Delete` | Remove the character after the cursor |
+| `Ctrl+Backspace` | Delete the word before the cursor |
+| `Ctrl+Z` | Undo the last edit to the current line |
+| `Tab` | Autocomplete against currently open filenames |
+| `Ctrl+C` | Copy selected text if something is selected, otherwise interrupt the current line |
+| `Ctrl+L` | Clear the terminal screen |
+| `clear` (typed command) | Same as `Ctrl+L` |
+| `history` (typed command) | List previously run commands |
+| `help` (typed command) | List these shortcuts inside the terminal |
+| Mouse drag | Select text |
+
+The prompt shows the active file (e.g. `[hello.sa] $`) when one is open, and falls back to `$` otherwise. Scrollback is 5000 lines, and multi-line pastes are split and submitted as separate commands. When the terminal has keyboard focus, an animated glowing border rotates around the whole box; it fades out on blur.
+
+Note: `Ctrl+W` is the usual shell binding for "delete word", but browsers reserve it to close the current tab and never deliver it to the page — `Ctrl+Backspace` is used instead.
+
 ---
 
 ## Why Quantum?
