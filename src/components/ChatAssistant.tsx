@@ -6,6 +6,7 @@ import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import Lottie from 'lottie-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
+import { useDraggablePosition } from '../hooks/useDraggablePosition';
 import { env } from '../config/env';
 import liveChatbotAnimation from '../assets/live-chatbot.json';
 import ligaHistoryAnimation from '../assets/liga-history.json';
@@ -105,6 +106,9 @@ const API_BASE = env.API_URL;
 export const ChatAssistant = () => {
   const { theme } = useTheme();
   const [isOpen, setIsOpen] = React.useState(false);
+  // The launcher is the drag handle; the whole wrapper (launcher + panel above it) moves with it.
+  const { handleRef: launcherRef, dragging, positionStyle, handleProps: launcherDragProps, consumeClick } =
+    useDraggablePosition<HTMLButtonElement>('quantum_chat_assistant_position');
   const INITIAL_WELCOME_CONTENT = `### Welcome to Quantum AI Assistant!
 I'm here to help you learn and build applications using the **Quantum Language**.
 
@@ -597,7 +601,7 @@ Select a quick prompt below or type your questions directly!`;
   };
 
   return (
-    <div className="fixed bottom-8 right-8 z-[70] flex flex-col items-end">
+    <div className="fixed bottom-8 right-8 z-[70] flex flex-col items-end" style={positionStyle}>
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -1104,11 +1108,19 @@ Select a quick prompt below or type your questions directly!`;
       </AnimatePresence>
 
       <motion.button
-        onClick={() => setIsOpen(!isOpen)}
+        ref={launcherRef}
+        onClick={() => {
+          if (consumeClick()) return;
+          setIsOpen(!isOpen);
+        }}
+        {...launcherDragProps}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        className="w-16 h-16 rounded-full bg-gradient-to-br from-[#08252e] to-[#041217] hover:from-[#0c3745] hover:to-[#08252e] text-white flex items-center justify-center shadow-[0_0_25px_rgba(6,182,212,0.5)] border border-cyan-400/40 cursor-pointer relative group p-1"
-        title="Ask Quantum AI"
+        className={cn(
+          "w-16 h-16 rounded-full bg-gradient-to-br from-[#08252e] to-[#041217] hover:from-[#0c3745] hover:to-[#08252e] text-white flex items-center justify-center shadow-[0_0_25px_rgba(6,182,212,0.5)] border border-cyan-400/40 relative group p-1 select-none",
+          dragging ? "cursor-grabbing" : "cursor-grab"
+        )}
+        title="Ask Quantum AI · drag to move"
       >
         <div className="absolute inset-0 rounded-full animate-ping bg-cyan-400/20 opacity-75" style={{ animationDuration: '3s' }} />
         <AnimatePresence mode="wait">
