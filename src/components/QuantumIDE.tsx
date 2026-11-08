@@ -11,6 +11,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
+import { env } from '../config/env';
 
 export const QuantumIDE = () => {
   const { theme } = useTheme();
@@ -436,8 +437,8 @@ if (caretAbsoluteX > visibleRight - bufferX) {
               <div className="flex items-center gap-2 md:gap-3 text-[10px] md:text-xs text-black/40 dark:text-white/40 font-mono">
                 <div className="flex items-center gap-2 px-2 py-1 rounded bg-black/5 dark:bg-white/5">
                   <Terminal className="w-3 h-3" />
-                  <span className="hidden xs:inline text-cyan-500">quantum-cli v2.0.4</span>
-                  <span className="xs:hidden text-cyan-500">v2.0.4</span>
+                  <span className="hidden xs:inline text-cyan-500">quantum-cli {env.APP_VERSION}</span>
+                  <span className="xs:hidden text-cyan-500">{env.APP_VERSION}</span>
                 </div>
                 <div className="hidden lg:flex items-center gap-2 px-2 py-1 rounded bg-black/5 dark:bg-white/5">
                   <Cpu className="w-3 h-3" />
@@ -699,7 +700,7 @@ if (caretAbsoluteX > visibleRight - bufferX) {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-black/30 dark:text-white/30">
                         <span className="text-cyan-500">➜</span>
-                        <span>Quantum Runtime Environment [Version 2.0.4]</span>
+                        <span>Quantum Runtime Environment [Version {env.APP_VERSION.replace(/^v/, '')}]</span>
                       </div>
                       <div className="flex items-center gap-2 text-black/20 dark:text-white/20 italic">
                         <span className="text-cyan-500">➜</span>

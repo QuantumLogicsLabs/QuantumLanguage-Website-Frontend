@@ -3,8 +3,11 @@ import { motion } from 'motion/react';
 import { Globe, Terminal, Cpu, Download, Info, ShieldAlert } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { env } from '../config/env';
+import { useLatestRelease } from '../hooks/useLatestRelease';
 
-export const DownloadPage = () => (
+export const DownloadPage = () => {
+  const release = useLatestRelease();
+  return (
   <div className="pt-32 pb-20 min-h-screen bg-white dark:bg-black relative overflow-hidden transition-colors duration-300">
     <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:40px_40px] dark:[mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
     <div className="max-w-7xl mx-auto px-6 relative z-10">
@@ -22,9 +25,9 @@ export const DownloadPage = () => (
 
       <div className="grid md:grid-cols-3 gap-8 mb-16">
         {[
-          { os: "Windows", icon: Globe, version: env.APP_VERSION, arch: "x64 / ARM64", link: "/downloads/QuantumSetup.exe", download: "QuantumSetup.exe", available: true, color: "from-blue-500/20" },
-          { os: "Linux", icon: Terminal, version: env.APP_VERSION, arch: "x64 / ARM64 / RISC-V", link: env.GITHUB_RELEASES_URL, available: false, color: "from-orange-500/20" },
-          { os: "macOS", icon: Cpu, version: env.APP_VERSION, arch: "Apple Silicon / Intel", link: env.GITHUB_RELEASES_URL, available: false, color: "from-purple-500/20" }
+          { os: "Windows", icon: Globe, version: release.version, arch: "x64 / ARM64", link: release.installerUrl, download: "QuantumSetup.exe", available: true, color: "from-blue-500/20" },
+          { os: "Linux", icon: Terminal, version: release.version, arch: "x64 / ARM64 / RISC-V", link: env.GITHUB_RELEASES_URL, available: false, color: "from-orange-500/20" },
+          { os: "macOS", icon: Cpu, version: release.version, arch: "Apple Silicon / Intel", link: env.GITHUB_RELEASES_URL, available: false, color: "from-purple-500/20" }
         ].map((item, i) => (
           <motion.div 
             key={i}
@@ -121,4 +124,5 @@ export const DownloadPage = () => (
       </motion.div>
     </div>
   </div>
-);
+  );
+};
