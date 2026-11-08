@@ -3,8 +3,10 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Globe, Terminal } from 'lucide-react';
 import { Github as GithubIcon } from './icons/BrandIcons';
 import { env } from '../config/env';
+import { useLatestRelease } from '../hooks/useLatestRelease';
 
 export const Footer = () => {
+  const release = useLatestRelease();
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
@@ -83,7 +85,7 @@ export const Footer = () => {
               <div className="w-1.5 h-1.5 bg-current rounded-full animate-pulse" />
               All Systems Operational
             </div>
-            <p className="text-[10px] text-black/30 dark:text-white/30">{env.APP_VERSION} Stable Release</p>
+            <p className="text-[10px] text-black/30 dark:text-white/30">{release.version} Stable Release</p>
           </div>
         </div>
       </div>

@@ -162,7 +162,7 @@ const QuantumTerminal =  forwardRef<QuantumTerminalHandle, QuantumTerminalProps>
 
     const getPrompt = () => (activeFileRef.current ? `[${activeFileRef.current}] $ ` : '$ ');
 
-    term.writeln('\x1b[36mQuantum Terminal\x1b[0m  v2.0.4');
+    term.writeln(`\x1b[36mQuantum Terminal\x1b[0m  ${env.APP_VERSION}`);
     term.writeln('Type `quantum <file>` (e.g. `quantum main.sa` or `quantum ruby_demo.rb`) to run. Type `help` for shortcuts.');
     term.writeln('');
     term.write(getPrompt());

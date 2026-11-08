@@ -64,6 +64,13 @@ const GITHUB_RELEASES_URL = getEnv(
   'https://github.com/SENODROOM/Quantum-Language/releases',
 );
 
+/**
+ * Where latest.json and QuantumSetup.exe are served from. They are static files in
+ * public/ (`quantum version.sa` puts them there), so the default is this same site;
+ * set it only to point a preview or dev site at the live one.
+ */
+const COMPILER_HOST_URL = getEnv('VITE_COMPILER_HOST_URL', '').replace(/\/+$/, '');
+
 /** Code Explanation ecosystem repo */
 const GITHUB_CODE_EXPLANATION_URL = getEnv(
   'VITE_GITHUB_CODE_EXPLANATION_URL',
@@ -96,8 +103,12 @@ const DISCORD_URL = getEnv('VITE_DISCORD_URL', 'https://discord.gg/HvgzP4pBJ');
 /** Application display name */
 const APP_NAME = getEnv('VITE_APP_NAME', 'Quantum');
 
-/** Current application / language version */
-const APP_VERSION = getEnv('VITE_APP_VERSION', 'v2.0.4');
+/**
+ * Language version shown when the compiler host cannot be reached (and in the
+ * IDE / terminal banners). The download page and footer show the host's
+ * latest.json version instead — see hooks/useLatestRelease.ts.
+ */
+const APP_VERSION = getEnv('VITE_APP_VERSION', 'v3.0.0');
 
 // ---------------------------------------------------------------------------
 // Debug flag — available via `import.meta.env.VITE_DEBUG`
@@ -120,6 +131,7 @@ export const env = {
   GITHUB_CODE_EXPLANATION_URL,
   GITHUB_DOCS_SYNCER_URL,
   GITHUB_AUTHOR_URL,
+  COMPILER_HOST_URL,
 
   DISCORD_URL,
 
